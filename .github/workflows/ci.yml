@@ -1,0 +1,160 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+permissions:
+  contents: read
+
+jobs:
+  terraform-fmt:
+    name: Terraform Format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "~1.9"
+
+      - name: Check formatting
+        run: terraform fmt -check -recursive -diff
+
+  terraform-validate:
+    name: Terraform Validate
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        environment:
+          - environments/vpc-peering
+          - environments/privatelink
+          - environments/transit-gateway
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "~1.9"
+
+      - name: Init
+        working-directory: ${{ matrix.environment }}
+        run: terraform init -backend=false -input=false
+
+      - name: Validate
+        working-directory: ${{ matrix.environment }}
+        run: terraform validate
+
+  tflint:
+    name: TFLint
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        directory:
+          - modules/vpc-peering
+          - modules/privatelink
+          - modules/transit-gateway
+          - environments/vpc-peering
+          - environments/privatelink
+          - environments/transit-gateway
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: terraform-linters/setup-tflint@v4
+        with:
+          tflint_version: latest
+
+      - name: Init TFLint plugins
+        run: tflint --init
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - name: Run TFLint
+        working-directory: ${{ matrix.directory }}
+        run: tflint --format compact
+
+  tfsec:
+    name: Trivy (Terraform Security)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Trivy scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: config
+          scan-ref: .
+          exit-code: 1
+          severity: HIGH,CRITICAL
+
+  checkov:
+    name: Checkov
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Checkov
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: .
+          framework: terraform
+          quiet: true
+          soft_fail: true
+
+  localstack-integration:
+    name: LocalStack Integration Test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    needs: [terraform-fmt, terraform-validate, tflint]
+    env:
+      LOCALSTACK_AUTH_TOKEN: ${{ secrets.LOCALSTACK_AUTH_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "~1.9"
+
+      - name: Start LocalStack
+        if: env.LOCALSTACK_AUTH_TOKEN != ''
+        run: |
+          docker compose up -d
+          echo "Waiting for LocalStack..."
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:4566/_localstack/health > /dev/null 2>&1 && break
+            sleep 3
+          done
+          curl -s http://localhost:4566/_localstack/health | python3 -m json.tool || true
+
+      - name: Test VPC Peering
+        if: env.LOCALSTACK_AUTH_TOKEN != ''
+        run: |
+          cd environments/vpc-peering
+          terraform init -input=false
+          terraform apply -auto-approve
+          terraform output
+          terraform destroy -auto-approve
+
+      - name: Test PrivateLink
+        if: env.LOCALSTACK_AUTH_TOKEN != ''
+        run: |
+          cd environments/privatelink
+          terraform init -input=false
+          terraform apply -auto-approve
+          terraform output
+          terraform destroy -auto-approve
+
+      - name: Test Transit Gateway
+        if: env.LOCALSTACK_AUTH_TOKEN != ''
+        run: |
+          cd environments/transit-gateway
+          terraform init -input=false
+          terraform apply -auto-approve
+          terraform output
+          terraform destroy -auto-approve
+
+      - name: Cleanup
+        if: always()
+        run: docker compose down -v 2>/dev/null || true

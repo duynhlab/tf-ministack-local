@@ -1,0 +1,15 @@
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfplan
+.terraform.lock.hcl
+
+# LocalStack
+volume/
+
+# Environment
+.env
+
+# OS
+.DS_Store

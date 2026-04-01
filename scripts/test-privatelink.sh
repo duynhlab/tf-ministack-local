@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENV_DIR="$(dirname "$SCRIPT_DIR")/environments/privatelink"
-AWS="aws --endpoint-url=http://localhost:4566 --region us-east-1"
+AWS="AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test aws --endpoint-url=http://localhost:4566 --region us-east-1"
 PASS=0
 FAIL=0
 

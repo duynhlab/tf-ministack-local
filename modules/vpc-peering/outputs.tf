@@ -19,11 +19,11 @@ output "peering_status" {
 }
 
 output "requester_route_table_id" {
-  description = "Requester route table ID"
+  description = "Requester Route Table ID"
   value       = aws_route_table.requester.id
 }
 
 output "accepter_route_table_id" {
-  description = "Accepter route table ID"
+  description = "Accepter Route Table ID"
   value       = aws_route_table.accepter.id
 }

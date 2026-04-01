@@ -12,25 +12,31 @@ This report analyzes three primary AWS VPC connectivity solutions for enterprise
 
 ### 2.1 VPC Peering (Cross-Region)
 
-```
- ┌─────────────────────────────┐         ┌─────────────────────────────┐
- │     Region A (us-east-1)    │         │     Region B (eu-west-1)    │
- │                             │         │                             │
- │  ┌───────────────────────┐  │         │  ┌───────────────────────┐  │
- │  │  VPC: 10.0.0.0/16     │  │         │  │  VPC: 10.1.0.0/16     │  │
- │  │                       │  │         │  │                       │  │
- │  │  ┌─────────┐          │  │  VPC    │  │  ┌─────────┐          │  │
- │  │  │ Subnet  │          │◄─┼─Peering─┼──►  │ Subnet  │          │  │
- │  │  │10.0.1/24│          │  │  Conn   │  │  │10.1.1/24│          │  │
- │  │  └─────────┘          │  │         │  │  └─────────┘          │  │
- │  │  ┌─────────┐          │  │         │  │  ┌─────────┐          │  │
- │  │  │ Subnet  │          │  │         │  │  │ Subnet  │          │  │
- │  │  │10.0.2/24│          │  │         │  │  │10.1.2/24│          │  │
- │  │  └─────────┘          │  │         │  │  └─────────┘          │  │
- │  │                       │  │         │  │                       │  │
- │  │  RT: 10.1.0.0/16 →pcx │  │         │  │  RT: 10.0.0.0/16 →pcx │  │
- │  └───────────────────────┘  │         │  └───────────────────────┘  │
- └─────────────────────────────┘         └─────────────────────────────┘
+```mermaid
+graph LR
+    subgraph "Region A (us-east-1)"
+        VA[VPC Requester<br/>10.0.0.0/16]
+        SA1[Subnet 10.0.1.0/24]
+        SA2[Subnet 10.0.2.0/24]
+        RTA[Route Table<br/>→ 10.1.0.0/16 via pcx]
+        VA --> SA1
+        VA --> SA2
+        SA1 --> RTA
+        SA2 --> RTA
+    end
+    
+    subgraph "Region B (eu-west-1)"
+        VB[VPC Accepter<br/>10.1.0.0/16]
+        SB1[Subnet 10.1.1.0/24]
+        SB2[Subnet 10.1.2.0/24]
+        RTB[Route Table<br/>→ 10.0.0.0/16 via pcx]
+        VB --> SB1
+        VB --> SB2
+        SB1 --> RTB
+        SB2 --> RTB
+    end
+    
+    VA -->|VPC Peering Connection| VB
 ```
 
 **Key characteristics:**
@@ -38,32 +44,28 @@ This report analyzes three primary AWS VPC connectivity solutions for enterprise
 - Non-transitive: if VPC-A peers with VPC-B and VPC-B peers with VPC-C, VPC-A cannot reach VPC-C through VPC-B
 - Routes must be added explicitly in both VPCs
 - CIDRs must not overlap
+- Security groups control traffic between peered VPCs
 
 ### 2.2 AWS PrivateLink (Service-Level)
 
-```
- ┌──────────────────────────────────┐    ┌──────────────────────────────────┐
- │      Provider VPC (10.2.0.0/16)  │    │      Consumer VPC (10.3.0.0/16)  │
- │                                  │    │                                  │
- │  ┌────────────┐                  │    │                  ┌─────────────┐ │
- │  │  Service    │                  │    │                  │  Application│ │
- │  │  (Backend)  │                  │    │                  │  (Client)   │ │
- │  └──────┬─────┘                  │    │                  └──────┬──────┘ │
- │         │                        │    │                         │        │
- │  ┌──────▼──────┐                 │    │                  ┌──────▼──────┐ │
- │  │     NLB      │                 │    │                  │ VPC Endpoint │ │
- │  │  (internal)  │                 │    │                  │ (Interface)  │ │
- │  └──────┬──────┘                 │    │                  └──────┬──────┘ │
- │         │                        │    │                         │        │
- │  ┌──────▼──────────────┐         │    │                         │        │
- │  │  VPC Endpoint        │  AWS    │    │                         │        │
- │  │  Service             │◄─PrivateLink─┤                         │        │
- │  │  (expose NLB)        │  (ENI)  │    │                         │        │
- │  └─────────────────────┘         │    │                         │        │
- │                                  │    │  Consumer sends traffic to       │
- │                                  │    │  Endpoint ENI → routed via AWS   │
- │                                  │    │  backbone to Provider NLB        │
- └──────────────────────────────────┘    └──────────────────────────────────┘
+```mermaid
+graph LR
+    subgraph "Provider VPC (10.2.0.0/16)"
+        Backend[Backend Service]
+        NLB[Network Load Balancer<br/>Internal]
+        EPS[VPC Endpoint Service]
+        Backend --> NLB
+        NLB --> EPS
+    end
+    
+    subgraph "Consumer VPC (10.3.0.0/16)"
+        App[Application Client]
+        EP[VPC Endpoint<br/>Interface Type]
+        App --> EP
+    end
+    
+    EPS -->|AWS PrivateLink| EP
+    EP -->|ENI in Consumer VPC| App
 ```
 
 **Key characteristics:**
@@ -72,38 +74,27 @@ This report analyzes three primary AWS VPC connectivity solutions for enterprise
 - No CIDR overlap issues (uses ENIs in consumer VPC)
 - Provider controls who can connect (acceptance model)
 - Works cross-account natively
+- Traffic stays on AWS backbone, never touches internet
 
 ### 2.3 AWS Transit Gateway (Hub-and-Spoke)
 
-```
-                         ┌────────────────────────┐
-                         │   Region A (us-east-1)  │
-                         │                        │
-  ┌───────────────┐      │  ┌──────────────────┐  │      ┌───────────────┐
-  │  Spoke-1 VPC  │      │  │  Transit Gateway  │  │      │  Spoke-2 VPC  │
-  │ 10.10.0.0/16  │──────┼──►   (Hub, ASN      │◄─┼──────│ 10.11.0.0/16  │
-  │               │ att  │  │    64512)         │  │ att  │               │
-  │  ┌─────────┐  │      │  └────────┬─────────┘  │      │  ┌─────────┐  │
-  │  │subnet-0 │  │      │           │             │      │  │subnet-0 │  │
-  │  │subnet-1 │  │      │      TGW Peering        │      │  │subnet-1 │  │
-  │  └─────────┘  │      │           │             │      │  └─────────┘  │
-  └───────────────┘      └───────────┼─────────────┘      └───────────────┘
-                                     │
-                         ┌───────────┼─────────────┐
-                         │   Region B│(eu-west-1)  │
-                         │           │             │
-                         │  ┌────────▼─────────┐   │
-                         │  │  Transit Gateway  │   │
-                         │  │   (Hub, ASN       │   │
-  ┌───────────────┐      │  │    64513)         │   │
-  │  Spoke-3 VPC  │──────┼──►                  │   │
-  │ 10.12.0.0/16  │ att  │  └──────────────────┘   │
-  │               │      │                        │
-  │  ┌─────────┐  │      └────────────────────────┘
-  │  │subnet-0 │  │
-  │  │subnet-1 │  │
-  │  └─────────┘  │
-  └───────────────┘
+```mermaid
+graph TD
+    subgraph "Region A (us-east-1)"
+        TGWA[Transit Gateway<br/>ASN 64512]
+        VPC1[VPC Spoke-1<br/>10.10.0.0/16]
+        VPC2[VPC Spoke-2<br/>10.11.0.0/16]
+        VPC1 -->|Attachment| TGWA
+        VPC2 -->|Attachment| TGWA
+    end
+    
+    subgraph "Region B (eu-west-1)"
+        TGWB[Transit Gateway<br/>ASN 64513]
+        VPC3[VPC Spoke-3<br/>10.12.0.0/16]
+        VPC3 -->|Attachment| TGWB
+    end
+    
+    TGWA -->|TGW Peering| TGWB
 ```
 
 **Key characteristics:**
@@ -112,6 +103,7 @@ This report analyzes three primary AWS VPC connectivity solutions for enterprise
 - Cross-region via TGW peering
 - Centralized route management
 - Supports thousands of attachments
+- Route tables provide segmentation and traffic control
 
 ---
 
@@ -306,35 +298,160 @@ Phase 3:     Multi-account with TGW shared via RAM
 
 ---
 
-## 7. LocalStack Testing Notes
+## 7. LocalStack Testing & Validation
 
-### Supported features (LocalStack Pro):
-- VPC creation, subnets, route tables, security groups: Full support
-- VPC Peering (including cross-region): Supported
-- Transit Gateway + VPC attachments: Supported
-- TGW Peering (cross-region): Supported
-- VPC Endpoint Service + Interface Endpoints: Supported
-- NLB (Network Load Balancer): Supported
+This project includes comprehensive test scripts that validate the Terraform implementations on LocalStack Pro. The tests verify both resource creation and configuration correctness.
 
-### Limitations:
-- **No real data plane**: LocalStack emulates the AWS API control plane. You cannot send actual ICMP/TCP traffic between VPCs. Tests verify resource state (e.g., `active`, `available`), not packet flow.
-- **Some state transitions may be instant**: In real AWS, peering acceptance and TGW attachment provisioning take minutes. LocalStack may return `available` immediately.
-- **Cross-region is simulated**: All regions run in the same LocalStack container. Useful for testing Terraform code, not for latency/performance testing.
+### Test Scripts Overview
 
-### What these tests validate:
-1. Terraform code is syntactically correct and applies cleanly
-2. Resource dependencies are correctly modeled
-3. Cross-region provider aliases work correctly
-4. Route tables, security groups, and attachments reference correct resources
-5. All outputs are populated with valid resource IDs
+| Script | Tests | Validation Points |
+|---|---|---|
+| `test-vpc-peering.sh` | Cross-region VPC peering | Peering status, VPC existence, route table entries, security groups |
+| `test-privatelink.sh` | PrivateLink service exposure | Endpoint service state, VPC endpoint availability, NLB configuration |
+| `test-transit-gateway.sh` | Transit Gateway hub-and-spoke | TGW availability, attachment states, cross-region peering, route propagation |
+| `test-all.sh` | Full test suite | Runs all individual tests sequentially |
+
+### What Tests Validate
+
+**Resource State Verification:**
+- VPC creation and CIDR assignment
+- Subnet creation and route table associations
+- Security group rules and ingress/egress configuration
+- Route table entries and propagation
+
+**Connectivity Configuration:**
+- VPC peering connection acceptance and active status
+- Transit Gateway attachment availability
+- VPC endpoint service and consumer endpoint states
+- Cross-region resource references and dependencies
+
+**Infrastructure Completeness:**
+- All required resources are created
+- Terraform outputs contain valid resource IDs
+- Provider aliases work correctly for multi-region deployments
+- Resource dependencies are properly modeled
+
+### LocalStack Pro Features Used
+
+- **EC2 Service**: Full VPC, subnet, route table, security group, peering support
+- **ELBv2**: Network Load Balancer for PrivateLink
+- **Multi-region Simulation**: Cross-region resources in single container
+- **Resource State Management**: Proper state transitions and dependencies
+
+### Limitations & Notes
+
+- **Control Plane Only**: Tests validate AWS API responses, not actual network packet flow
+- **Instant State Changes**: LocalStack may return resources as "available" immediately vs. real AWS timing
+- **No Data Plane Traffic**: Cannot test actual ICMP/TCP connectivity between VPCs
+- **Simulated Cross-Region**: All regions run in one container for testing convenience
+
+### Running Tests
+
+```bash
+# Set LocalStack auth token
+export LOCALSTACK_AUTH_TOKEN=your_token
+
+# Run individual tests
+./scripts/test-vpc-peering.sh
+./scripts/test-privatelink.sh
+./scripts/test-transit-gateway.sh
+
+# Run full suite
+./scripts/test-all.sh
+```
+
+Tests use AWS CLI with LocalStack endpoints and dummy credentials for API validation.
 
 ---
 
-## 8. Summary Table
+## 9. Project Implementation Details
+
+### Module Structure
+
+```
+modules/
+├── vpc-peering/           # Cross-region VPC peering
+│   ├── main.tf           # VPCs, subnets, peering, routes, security groups
+│   ├── variables.tf      # CIDRs, regions, tags
+│   └── outputs.tf        # VPC IDs, peering connection, route tables
+├── privatelink/          # PrivateLink service exposure
+│   ├── main.tf           # NLB, endpoint service, consumer endpoint
+│   ├── variables.tf      # Service ports, acceptance settings
+│   └── outputs.tf        # Endpoint service name, consumer endpoint ID
+└── transit-gateway/      # Hub-and-spoke networking
+    ├── main.tf           # TGWs, attachments, peering, route tables
+    ├── variables.tf      # Regions, ASN numbers, attachment settings
+    └── outputs.tf        # TGW IDs, attachment states, peering status
+```
+
+### Environment Configurations
+
+```
+environments/
+├── vpc-peering/          # Test environment for peering
+├── privatelink/          # Test environment for PrivateLink
+└── transit-gateway/      # Test environment for TGW
+```
+
+Each environment includes:
+- `main.tf`: Root module with provider configurations
+- `outputs.tf`: Environment-specific outputs
+- Multi-region AWS provider aliases for cross-region resources
+
+### Key Terraform Patterns Used
+
+**Cross-Region Providers:**
+```hcl
+provider "aws" {
+  alias  = "requester"
+  region = "us-east-1"
+}
+
+provider "aws" {
+  alias  = "accepter"
+  region = "eu-west-1"
+}
+```
+
+**Resource References Across Regions:**
+```hcl
+resource "aws_vpc_peering_connection" "this" {
+  provider    = aws.requester
+  vpc_id      = aws_vpc.requester.id
+  peer_vpc_id = aws_vpc.accepter.id
+  peer_region = data.aws_region.accepter.name
+}
+```
+
+**Conditional Resource Creation:**
+```hcl
+resource "aws_vpc_peering_connection_accepter" "this" {
+  provider                  = aws.accepter
+  vpc_peering_connection_id = aws_vpc_peering_connection.this.id
+  auto_accept               = true
+}
+```
+
+### Security Considerations
+
+- **Security Groups**: Properly configured ingress/egress rules
+- **Route Tables**: Explicit routes for peered VPCs
+- **PrivateLink**: Acceptance-based access control
+- **TGW Route Tables**: Segmentation and traffic isolation
+
+### Cost Optimization
+
+- **LocalStack Testing**: Zero AWS costs for development/testing
+- **Resource Tagging**: Consistent tagging for cost allocation
+- **Modular Design**: Reusable modules across environments
+
+---
+
+## 10. Summary Table
 
 | Solution | Complexity | Cost | Scalability | Security | Best For |
 |---|---|---|---|---|---|
-| VPC Peering | Low | Low | Poor (O(n^2)) | Coarse | Small deployments (< 5 VPCs) |
+| VPC Peering | Low | Low | Poor (O(n²)) | Coarse | Small deployments (< 5 VPCs) |
 | PrivateLink | Medium | Medium | Excellent | Fine-grained | Service exposure, SaaS |
 | Transit Gateway | High | High | Excellent (O(n)) | Centralized | Enterprise, many VPCs |
 

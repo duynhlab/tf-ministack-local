@@ -108,6 +108,7 @@ resource "aws_security_group" "spoke_a" {
   }
 
   egress {
+    #trivy:ignore:aws-0104 - Unrestricted egress required for spoke VPC connectivity testing
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
@@ -239,6 +240,7 @@ resource "aws_security_group" "spoke_b" {
   }
 
   egress {
+    #trivy:ignore:aws-0104 - Unrestricted egress required for spoke VPC connectivity testing
     from_port   = 0
     to_port     = 0
     protocol    = "-1"

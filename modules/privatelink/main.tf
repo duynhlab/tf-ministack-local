@@ -51,6 +51,7 @@ resource "aws_security_group" "nlb" {
   }
 
   egress {
+    #trivy:ignore:aws-0104 - Unrestricted egress required for NLB backend connectivity in lab
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
@@ -139,6 +140,7 @@ resource "aws_security_group" "endpoint" {
   }
 
   egress {
+    #trivy:ignore:aws-0104 - Unrestricted egress required for VPC endpoint connectivity in lab
     from_port   = 0
     to_port     = 0
     protocol    = "-1"

@@ -105,6 +105,17 @@ terraform output
     └── report.md                   # Full analysis: use-cases, trade-offs, recommendations
 ```
 
+## Install docker compsoe cli 
+
+```
+mkdir -p ~/.docker/cli-plugins
+
+curl -SL https://github.com/docker/compose/releases/latest/download/docker-compose-linux-x86_64 \
+  -o ~/.docker/cli-plugins/docker-compose
+
+chmod +x ~/.docker/cli-plugins/docker-compose
+```
+
 ## What Tests Verify
 
 Tests use the AWS CLI against LocalStack to verify:

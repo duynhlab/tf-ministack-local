@@ -1,0 +1,56 @@
+###############################################################################
+# Prod Environment – Multi-Region Real AWS
+###############################################################################
+
+# ─── VPC Peering (Cross-Region) ──────────────────────────────────────────────
+
+module "vpc_peering" {
+  source = "../../modules/vpc-peering"
+
+  providers = {
+    aws.requester = aws.ap_southeast_1
+    aws.accepter  = aws.us_east_1
+  }
+
+  requester_cidr    = var.peering_requester_cidr
+  accepter_cidr     = var.peering_accepter_cidr
+  requester_subnets = var.peering_requester_subnets
+  accepter_subnets  = var.peering_accepter_subnets
+  tags              = var.tags
+}
+
+# ─── PrivateLink (Service-Level) ─────────────────────────────────────────────
+# PrivateLink is regional, so we deploy both provider and consumer in Region A
+
+module "privatelink" {
+  source = "../../modules/privatelink"
+
+  providers = {
+    aws.provider_region = aws.ap_southeast_1
+    aws.consumer_region = aws.ap_southeast_1
+  }
+
+  provider_cidr    = var.pl_provider_cidr
+  consumer_cidr    = var.pl_consumer_cidr
+  provider_subnets = var.pl_provider_subnets
+  consumer_subnets = var.pl_consumer_subnets
+  service_port     = var.pl_service_port
+  tags             = var.tags
+}
+
+# ─── Transit Gateway (Hub-and-Spoke Cross-Region) ────────────────────────────
+
+module "transit_gateway" {
+  source = "../../modules/transit-gateway"
+
+  providers = {
+    aws.region_a = aws.ap_southeast_1
+    aws.region_b = aws.us_east_1
+  }
+
+  spoke_vpcs          = var.tgw_spokes_region_a
+  spoke_vpcs_region_b = var.tgw_spokes_region_b
+  tgw_asn_region_a    = var.tgw_asn_region_a
+  tgw_asn_region_b    = var.tgw_asn_region_b
+  tags                = var.tags
+}

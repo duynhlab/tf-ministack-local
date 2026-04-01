@@ -248,25 +248,17 @@ graph TD
 
 Given the current setup (single account, multi-region):
 
-### Short-term (current state, < 5 VPCs per region):
-**Use VPC Peering** for cross-region connectivity.
-- Simplest to implement and operate
-- Lowest cost
-- Sufficient when VPC count is small
-- Each region's VPC peers directly with counterparts in other regions
+### Short-term / Development (Dev Environment):
+**Sử dụng module `vpc-base` tại 1 Region (ap-southeast-1)**.
+- Triển khai 1 VPC duy nhất với 3-tier subnets (Public, App, Data)
+- Sử dụng 1 NAT Gateway để tiết kiệm chi phí
+- Đủ để phát triển và kiểm thử mà không cần network phức tạp
 
-### Medium-term (growing to 5-10 VPCs):
-**Migrate to Transit Gateway** within each region + TGW peering cross-region.
-- Avoids the N^2 peering explosion
-- Centralized route management
-- Enables network inspection/firewall (AWS Network Firewall integration)
-- Prepares for multi-account migration (TGW is shared via RAM)
-
-### For specific service exposure:
-**Add PrivateLink** for services that need controlled, service-level access.
-- Use alongside either Peering or TGW
-- Ideal when third-party integrations or partner access is needed
-- Can coexist with TGW-based backbone
+### Môi trường Production (Multi-Region Prod Environment):
+**Kết hợp cả 3 kỹ thuật cho kiến trúc phức tạp trên AWS (đã triển khai)**.
+- Dùng **VPC Peering** cho kết nối hai Application VPC giữa Singapore và N. Virginia.
+- Dùng **Transit Gateway** làm trục trung tâm mỗi region kết nối App, Data, Spoke VPCs.
+- Dùng **PrivateLink** để expose shared service nội bộ một cách an toàn mà không cần mở kết nối peering.
 
 ### Migration path:
 ```
@@ -364,12 +356,64 @@ Tests use AWS CLI with LocalStack endpoints and dummy credentials for API valida
 
 ---
 
+## 8. Real AWS Deployment
+
+Bên cạnh mô trường LocalStack dùng để kiểm thử tính khả thi, dự án đã được triển khai lên **Real AWS** với thiết kế hoàn chỉnh.
+
+### Thiết kế IP / Subnet
+Chúng tôi áp dụng mô hình phân tách hoàn toàn các block IP cho 7 VPC khác nhau trên 2 Region nhằm tránh xung đột IP.
+
+*Xem chi tiết bảng quy hoạch IP tại file [subnet.csv](file:///home/duydo/Working/duynhne/tf-test/docs/subnet.csv)*.
+
+### 8.1 Dev Environment
+Môi trường Development đơn giản chỉ chứa 1 VPC nằm ở `ap-southeast-1` (Singapore). Nó áp dụng module `vpc-base`:
+- **Kiến trúc 3-tier**: `Public` (cho ALB/IGW), `Private App` (cho EC2/EKS), `Private Data` (RDS/ElastiCache)
+- **High Availability**: Các subnets trải đều qua 2 Availability Zones (`ap-southeast-1a`, `ap-southeast-1b`)
+- **Cost Saving**: Sử dụng chung 1 NAT Gateway thay vì 2 cái.
+
+### 8.2 Prod Environment (Multi-Region)
+Được triển khai trên `ap-southeast-1` (Singapore) và `us-east-1` (N.Virginia) kết hợp toàn bộ 3 pattern connectivity.
+
+```mermaid
+graph TD
+    subgraph "ap-southeast-1 (Singapore)"
+        TGW_SG["Transit Gateway<br/>ASN 64512"]
+        APP_PEERING["prod-peering-requester<br/>10.0.0.0/16"]
+        PL_PROVIDER["prod-pl-provider<br/>10.2.0.0/16"]
+        PL_CONSUMER["prod-pl-consumer<br/>10.3.0.0/16"]
+        SPOKE_1["prod-tgw-spoke-1<br/>10.4.0.0/16"]
+        SPOKE_2["prod-tgw-spoke-2<br/>10.5.0.0/16"]
+
+        SPOKE_1 -->|Attachment| TGW_SG
+        SPOKE_2 -->|Attachment| TGW_SG
+
+        PL_PROVIDER -->|"PrivateLink<br/>(Endpoint Service)"| PL_CONSUMER
+    end
+
+    subgraph "us-east-1 (N. Virginia)"
+        TGW_US["Transit Gateway<br/>ASN 64513"]
+        APP_ACCEPTER["prod-peering-accepter<br/>10.1.0.0/16"]
+        SPOKE_DR["prod-tgw-spoke-dr<br/>10.6.0.0/16"]
+
+        SPOKE_DR -->|Attachment| TGW_US
+    end
+
+    TGW_SG <-->|"TGW Peering (Cross-region)"| TGW_US
+    APP_PEERING <-->|"VPC Peering (Cross-Region)"| APP_ACCEPTER
+```
+
+---
+
 ## 9. Project Implementation Details
 
 ### Module Structure
 
 ```
 modules/
+├── vpc-base/              # 3-Tier standalone VPC for Dev
+│   ├── main.tf           # VPC, IGW, NAT, subnets, RTs
+│   ├── variables.tf
+│   └── outputs.tf
 ├── vpc-peering/           # Cross-region VPC peering
 │   ├── main.tf           # VPCs, subnets, peering, routes, security groups
 │   ├── variables.tf      # CIDRs, regions, tags
@@ -388,9 +432,11 @@ modules/
 
 ```
 environments/
-├── vpc-peering/          # Test environment for peering
-├── privatelink/          # Test environment for PrivateLink
-└── transit-gateway/      # Test environment for TGW
+├── dev/                  # Real AWS Dev (Singapore)
+├── prod/                 # Real AWS Prod (Multi-region: SG, US-East)
+├── vpc-peering/          # Test environment for peering (LocalStack)
+├── privatelink/          # Test environment for PrivateLink (LocalStack)
+└── transit-gateway/      # Test environment for TGW (LocalStack)
 ```
 
 Each environment includes:
@@ -449,11 +495,12 @@ resource "aws_vpc_peering_connection_accepter" "this" {
 
 ## 10. Summary Table
 
-| Solution | Complexity | Cost | Scalability | Security | Best For |
+| Solution | Complexity | Cost | Scalability | Security | Áp dụng tại |
 |---|---|---|---|---|---|
-| VPC Peering | Low | Low | Poor (O(n²)) | Coarse | Small deployments (< 5 VPCs) |
-| PrivateLink | Medium | Medium | Excellent | Fine-grained | Service exposure, SaaS |
-| Transit Gateway | High | High | Excellent (O(n)) | Centralized | Enterprise, many VPCs |
+| Module `vpc-base` | Thấp | Thấp | Thấp (đơn lẻ) | 3-tier standard | `environments/dev` |
+| VPC Peering | Low | Low | Poor (O(n²)) | Coarse | `environments/prod` (Cross-Region App) |
+| PrivateLink | Medium | Medium | Excellent | Fine-grained | `environments/prod` (Service endpoint) |
+| Transit Gateway | High | High | Excellent (O(n)) | Centralized | `environments/prod` (Cross-region spokes) |
 
 ---
 

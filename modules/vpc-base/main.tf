@@ -1,0 +1,186 @@
+###############################################################################
+# VPC Base Module – Standalone VPC with 3-Tier Subnets
+#
+# Creates a single VPC with public, app (private), and data (private) subnets
+# across 2 AZs, plus IGW, NAT Gateway, and route tables.
+###############################################################################
+
+terraform {
+  required_version = ">= 1.3"
+
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = ">= 5.0"
+    }
+  }
+}
+
+# ─── Data Sources ────────────────────────────────────────────────────────────
+
+data "aws_availability_zones" "available" {
+  state = "available"
+}
+
+locals {
+  azs = slice(data.aws_availability_zones.available.names, 0, 2)
+}
+
+# ─── VPC ─────────────────────────────────────────────────────────────────────
+
+resource "aws_vpc" "this" {
+  #tfsec:ignore:aws-ec2-require-vpc-flow-logs-for-all-vpcs (Lab env)
+  cidr_block           = var.vpc_cidr
+  enable_dns_support   = true
+  enable_dns_hostnames = true
+
+  tags = merge(var.tags, { Name = var.vpc_name })
+}
+
+# ─── Internet Gateway ────────────────────────────────────────────────────────
+
+resource "aws_internet_gateway" "this" {
+  vpc_id = aws_vpc.this.id
+
+  tags = merge(var.tags, { Name = "${var.vpc_name}-igw" })
+}
+
+# ─── Public Subnets ──────────────────────────────────────────────────────────
+
+resource "aws_subnet" "public" {
+  count                   = length(var.public_subnets)
+  vpc_id                  = aws_vpc.this.id
+  cidr_block              = var.public_subnets[count.index]
+  availability_zone       = local.azs[count.index]
+  #tfsec:ignore:aws-ec2-no-public-ip-subnet (Lab env requires public subnet)
+  map_public_ip_on_launch = true
+
+  tags = merge(var.tags, {
+    Name = "${var.vpc_name}-public-${local.azs[count.index]}"
+    Tier = "Public"
+  })
+}
+
+resource "aws_route_table" "public" {
+  vpc_id = aws_vpc.this.id
+
+  tags = merge(var.tags, { Name = "${var.vpc_name}-public-rt" })
+}
+
+resource "aws_route" "public_internet" {
+  route_table_id         = aws_route_table.public.id
+  destination_cidr_block = "0.0.0.0/0"
+  gateway_id             = aws_internet_gateway.this.id
+}
+
+resource "aws_route_table_association" "public" {
+  count          = length(aws_subnet.public)
+  subnet_id      = aws_subnet.public[count.index].id
+  route_table_id = aws_route_table.public.id
+}
+
+# ─── NAT Gateway (Single AZ for cost optimization) ──────────────────────────
+
+resource "aws_eip" "nat" {
+  count  = var.nat_gateway_count
+  domain = "vpc"
+
+  tags = merge(var.tags, { Name = "${var.vpc_name}-nat-eip-${count.index}" })
+}
+
+resource "aws_nat_gateway" "this" {
+  count         = var.nat_gateway_count
+  allocation_id = aws_eip.nat[count.index].id
+  subnet_id     = aws_subnet.public[count.index].id
+
+  tags = merge(var.tags, { Name = "${var.vpc_name}-nat-${count.index}" })
+
+  depends_on = [aws_internet_gateway.this]
+}
+
+# ─── App Subnets (Private) ──────────────────────────────────────────────────
+
+resource "aws_subnet" "app" {
+  count             = length(var.app_subnets)
+  vpc_id            = aws_vpc.this.id
+  cidr_block        = var.app_subnets[count.index]
+  availability_zone = local.azs[count.index]
+
+  tags = merge(var.tags, {
+    Name = "${var.vpc_name}-app-${local.azs[count.index]}"
+    Tier = "Private-App"
+  })
+}
+
+resource "aws_route_table" "app" {
+  count  = length(var.app_subnets)
+  vpc_id = aws_vpc.this.id
+
+  tags = merge(var.tags, { Name = "${var.vpc_name}-app-rt-${count.index}" })
+}
+
+resource "aws_route" "app_nat" {
+  count                  = length(var.app_subnets)
+  route_table_id         = aws_route_table.app[count.index].id
+  destination_cidr_block = "0.0.0.0/0"
+  nat_gateway_id         = aws_nat_gateway.this[min(count.index, var.nat_gateway_count - 1)].id
+}
+
+resource "aws_route_table_association" "app" {
+  count          = length(aws_subnet.app)
+  subnet_id      = aws_subnet.app[count.index].id
+  route_table_id = aws_route_table.app[count.index].id
+}
+
+# ─── Data Subnets (Private – No Internet) ───────────────────────────────────
+
+resource "aws_subnet" "data" {
+  count             = length(var.data_subnets)
+  vpc_id            = aws_vpc.this.id
+  cidr_block        = var.data_subnets[count.index]
+  availability_zone = local.azs[count.index]
+
+  tags = merge(var.tags, {
+    Name = "${var.vpc_name}-data-${local.azs[count.index]}"
+    Tier = "Private-Data"
+  })
+}
+
+resource "aws_route_table" "data" {
+  count  = length(var.data_subnets)
+  vpc_id = aws_vpc.this.id
+
+  tags = merge(var.tags, { Name = "${var.vpc_name}-data-rt-${count.index}" })
+}
+
+resource "aws_route_table_association" "data" {
+  count          = length(aws_subnet.data)
+  subnet_id      = aws_subnet.data[count.index].id
+  route_table_id = aws_route_table.data[count.index].id
+}
+
+# ─── Default Security Group ─────────────────────────────────────────────────
+
+resource "aws_security_group" "default" {
+  name        = "${var.vpc_name}-default-sg"
+  description = "Default security group for ${var.vpc_name}"
+  vpc_id      = aws_vpc.this.id
+
+  ingress {
+    description = "Allow all traffic within VPC"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = [var.vpc_cidr]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"] #tfsec:ignore:aws-ec2-no-public-egress-sgr
+    description = "Allow all outbound traffic"
+  }
+
+  tags = merge(var.tags, { Name = "${var.vpc_name}-default-sg" })
+}

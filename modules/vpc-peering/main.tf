@@ -66,9 +66,9 @@ resource "aws_security_group" "requester" {
   }
 
   egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
+    from_port = 0
+    to_port   = 0
+    protocol  = "-1"
     #trivy:ignore:aws-0104 - Unrestricted egress required for lab connectivity testing
     cidr_blocks = ["0.0.0.0/0"]
   }

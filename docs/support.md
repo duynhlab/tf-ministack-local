@@ -127,6 +127,37 @@
 
 ---
 
+## WAF v2
+
+| Operation | MiniStack | LocalStack Pro | MiniStack Version | Notes |
+|---|---|---|---|---|
+| CreateWebACL | ✅ | ✅ | v1.1.17+ | WAFv2 core APIs được hỗ trợ
+| GetWebACL | ✅ | ✅ | v1.1.17+ | |
+| UpdateWebACL | ✅ | ✅ | v1.1.17+ | `LockToken` bắt buộc
+| DeleteWebACL | ✅ | ✅ | v1.1.17+ | `LockToken` bắt buộc
+| ListWebACLs | ✅ | ✅ | v1.1.17+ | |
+| AssociateWebACL | ✅ | ✅ | v1.1.17+ | |
+| DisassociateWebACL | ✅ | ✅ | v1.1.17+ | |
+| GetWebACLForResource | ✅ | ✅ | v1.1.17+ | |
+| ListResourcesForWebACL | ✅ | ✅ | v1.1.17+ | |
+| CreateIPSet | ✅ | ✅ | v1.1.17+ | |
+| GetIPSet | ✅ | ✅ | v1.1.17+ | |
+| UpdateIPSet | ✅ | ✅ | v1.1.17+ | `LockToken` bắt buộc
+| DeleteIPSet | ✅ | ✅ | v1.1.17+ | `LockToken` bắt buộc
+| ListIPSets | ✅ | ✅ | v1.1.17+ | |
+| CreateRuleGroup | ✅ | ✅ | v1.1.17+ | |
+| GetRuleGroup | ✅ | ✅ | v1.1.17+ | |
+| UpdateRuleGroup | ✅ | ✅ | v1.1.17+ | `LockToken` bắt buộc
+| DeleteRuleGroup | ✅ | ✅ | v1.1.17+ | `LockToken` bắt buộc
+| ListRuleGroups | ✅ | ✅ | v1.1.17+ | |
+| TagResource | ✅ | ✅ | v1.1.17+ | |
+| UntagResource | ✅ | ✅ | v1.1.17+ | |
+| ListTagsForResource | ✅ | ✅ | v1.1.17+ | |
+| CheckCapacity | ✅ | ✅ | v1.1.17+ | |
+| DescribeManagedRuleGroup | ✅ | ✅ | v1.1.17+ | |
+
+---
+
 ## EC2 — Instances & Images
 
 | Operation | MiniStack | LocalStack Pro | MiniStack Version | Notes |

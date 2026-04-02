@@ -115,6 +115,16 @@ terraform -chdir=environments/prod destroy -auto-approve
 ./scripts/teardown.sh
 ```
 
+Optional local setup (if Terraform not installed):
+
+```bash
+# macOS / Linux (apt-based):
+sudo apt-get update -y && sudo apt-get install -y curl unzip
+curl -fsSL -o terraform.zip https://releases.hashicorp.com/terraform/1.5.7/terraform_1.5.7_linux_amd64.zip
+sudo unzip -o terraform.zip -d /usr/local/bin && rm terraform.zip
+terraform version
+```
+
 Notes:
 
 - `LOCALSTACK_AUTH_TOKEN` is required to start LocalStack Pro and run `prod`.

@@ -7,6 +7,12 @@ variable "tags" {
   }
 }
 
+variable "enable_waf" {
+  description = "Enable WAF v2 resources"
+  type        = bool
+  default     = false
+}
+
 # ─── Edge 3-Tier VPC Variables ────────────────────────────────────────────────
 
 variable "edge_vpc_name" {

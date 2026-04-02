@@ -11,7 +11,7 @@ terraform {
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = ">= 5.0"
+      version = ">= 4.0"
     }
   }
 }
@@ -82,8 +82,7 @@ resource "aws_route_table_association" "public" {
 # ─── NAT Gateway (Single AZ for cost optimization) ──────────────────────────
 
 resource "aws_eip" "nat" {
-  count  = var.nat_gateway_count
-  domain = "vpc"
+  count = var.nat_gateway_count
 
   tags = merge(var.tags, { Name = "${var.vpc_name}-nat-eip-${count.index}" })
 }

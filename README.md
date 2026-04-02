@@ -132,12 +132,12 @@ Tests use the AWS CLI against LocalStack to verify:
 
 ## Documentation
 
-See [docs/report.md](docs/report.md) for:
-- Architecture diagrams for all 3 solutions
-- Use-case comparison table
-- Detailed trade-off analysis (cost, complexity, scalability, security, latency, ops)
-- Recommendation for single-account multi-region → multi-account migration path
-- Brief note on VPC Lattice (out of scope)
+See:
+- [docs/report.md](docs/report.md) for architecture diagrams, scenarios, and trade-offs
+- [docs/support.md](docs/support.md) for MiniStack vs LocalStack capability matrix and compatibility notes
+- [docs/changelog.md](docs/changelog.md) for provider version decisions and when to upgrade
+
+Also see `AGENTS.md` for agent guidance and workflow rules. 
 
 ## Troubleshooting
 

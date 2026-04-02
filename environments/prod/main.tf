@@ -73,3 +73,17 @@ module "transit_gateway" {
   enable_cross_region_peering = var.enable_tgw_cross_region_peering
   tags                        = var.tags
 }
+
+module "waf_v2" {
+  source                 = "../../modules/waf-v2"
+  count                  = var.enable_waf ? 1 : 0
+  web_acl_name           = "prod-edge-waf"
+  scope                  = "REGIONAL"
+  web_acl_description    = "WAFv2 Web ACL for prod edge VPC"
+  ip_set_name            = "prod-ipset"
+  ip_set_description     = "Prod WAF IP set for future rules"
+  ip_addresses           = []
+  associate_resource_arn = ""
+
+  tags = var.tags
+}

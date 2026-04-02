@@ -105,6 +105,33 @@ graph TD
 - Supports thousands of attachments
 - Route tables provide segmentation and traffic control
 
+### 2.4 AWS WAF v2 (Edge & Application Security)
+
+```mermaid
+graph LR
+    subgraph "Edge VPC"
+        IGW[Internet Gateway]
+        ALB[Application Load Balancer]
+        WAF[WAF v2 Web ACL]
+        ALB -->|attach| WAF
+        ALB --> backend[App fleet]
+    end
+
+    subgraph "Data VPC"
+        DB[Database]
+    end
+
+    backend --> DB
+```
+
+**Key characteristics:**
+- Web ACL inspects HTTP/S requests before reaching app targets (ALB/API GW)
+- Support for managed rule groups (`AWSManagedRulesCommonRuleSet`), rate-based rules, IP sets
+- `CreateWebACL`, `GetWebACL`, `UpdateWebACL`, `DeleteWebACL` (LockToken enforced)
+- `CreateIPSet`, `UpdateIPSet`, `DeleteIPSet` for allow/deny lists
+- `AssociateWebACL` and `DisassociateWebACL` to attach/detach from resource ARN
+- Ideal to combine with TGW/PrivateLink for multi-account, cross-region security
+
 ---
 
 ## 3. Use-Case Comparison
@@ -363,65 +390,71 @@ The Development environment contains 1 VPC located in `ap-southeast-1` (Singapor
 - **3-tier Architecture**: `Public` (ALB/IGW), `Private App` (EC2/EKS), `Private Data` (RDS)
 - **High Availability**: Subnets are spread across **3 Availability Zones** (`ap-southeast-1a`, `ap-southeast-1b`, `ap-southeast-1c`).
 - **Realistic emulation**: Runs 3 NAT Gateways to fully cover the public layer.
+- **WAF v2 (optional)**: `aws_wafv2_web_acl` + IP set available for ALB layer
 
 ```mermaid
 graph TD
     subgraph "ap-southeast-1 (MiniStack)"
         IGW[Internet Gateway]
-        
-        subgraph "VPC: dev-vpc (10.100.0.0/16)"
-            subgraph "AZ: ap-southeast-1a"
-                PUB_1A[Public Subnet 1A] --> NAT_1A[NAT GW 1A]
-                APP_1A[Private App 1A] --> NAT_1A
-                DATA_1A[Private Data 1A]
-            end
-            
-            subgraph "AZ: ap-southeast-1b"
-                PUB_1B[Public Subnet 1B] --> NAT_1B[NAT GW 1B]
-                APP_1B[Private App 1B] --> NAT_1B
-                DATA_1B[Private Data 1B]
-            end
-            
-            subgraph "AZ: ap-southeast-1c"
-                PUB_1C[Public Subnet 1C] --> NAT_1C[NAT GW 1C]
-                APP_1C[Private App 1C] --> NAT_1C
-                DATA_1C[Private Data 1C]
-            end
-        end
-        IGW --- PUB_1A & PUB_1B & PUB_1C
+        ALB[ALB (public)]
+        WAF[WAF v2 Web ACL]
+        DB[Data (RDS)]
+        APP[App Instances]
+        PUB[Public Subnets]
+        APP_SUB[App Subnets]
+        DATA_SUB[Data Subnets]
+        NAT[NAT GW]
+
+        ALB -->|Inspect| WAF
+        ALB --> APP
+        APP --> DATA
+        APP --> NAT
+
+        PUB --> IGW
+        APP_SUB --> APP
+        DATA_SUB --> DATA
+
+        WAF -- optional --> APP
     end
 ```
 
 ### 8.2 Prod Environment (Multi-Region / Emulation Features)
-Deployed across `ap-southeast-1` (Singapore) and `us-east-1` (N. Virginia) on MiniStack, combining all 3 connectivity patterns. This environment simulates Cross-region links, HUB-Spoke design, and VPC Endpoints in local emulation.
+Deployed across `ap-southeast-1` (Singapore) and `us-east-1` (N. Virginia) on LocalStack Pro, combining all 3 connectivity patterns. The layout includes TGW, VPC Peering, PrivateLink and WAF.
 
 ```mermaid
 graph TD
     subgraph "ap-southeast-1 (Singapore)"
-        TGW_SG["Transit Gateway<br/>ASN 64512"]
-        APP_PEERING["prod-peering-requester<br/>10.0.0.0/16"]
-        PL_PROVIDER["prod-pl-provider<br/>10.2.0.0/16"]
-        PL_CONSUMER["prod-pl-consumer<br/>10.3.0.0/16"]
-        SPOKE_1["prod-tgw-spoke-1<br/>10.4.0.0/16"]
-        SPOKE_2["prod-tgw-spoke-2<br/>10.5.0.0/16"]
+        EDGE_VPC["Edge VPC 10.0.0.0/16"]
+        TGW_A["TGW-A"]
+        PEER_A["VPC Peering Requester"]
+        PL_PROVIDER["PrivateLink Provider VPC"]
+        WAF_A["WAF v2 Web ACL"]
 
-        SPOKE_1 -->|Attachment| TGW_SG
-        SPOKE_2 -->|Attachment| TGW_SG
-
-        PL_PROVIDER -->|"PrivateLink<br/>(Endpoint Service)"| PL_CONSUMER
+        EDGE_VPC --> TGW_A
+        EDGE_VPC --> PEER_A
+        EDGE_VPC --> WAF_A
+        PL_PROVIDER -.->|PrivateLink| EDGE_VPC
     end
 
     subgraph "us-east-1 (N. Virginia)"
-        TGW_US["Transit Gateway<br/>ASN 64513"]
-        APP_ACCEPTER["prod-peering-accepter<br/>10.1.0.0/16"]
-        SPOKE_DR["prod-tgw-spoke-dr<br/>10.6.0.0/16"]
+        PEER_B["VPC Peering Accepter"]
+        TGW_B["TGW-B"]
+        PL_CONSUMER["PrivateLink Consumer VPC"]
+        WAF_B["WAF v2 Web ACL"]
 
-        SPOKE_DR -->|Attachment| TGW_US
+        PEER_B --> TGW_B
+        PEER_B --> WAF_B
+        PL_CONSUMER -.->|PrivateLink| PL_PROVIDER
     end
 
-    TGW_SG <-->|"TGW Peering (Cross-region)"| TGW_US
-    APP_PEERING <-->|"VPC Peering (Cross-Region)"| APP_ACCEPTER
+    TGW_A <-->|"TGW Peering"| TGW_B
+    PEER_A <-->|"VPC Peering"| PEER_B
 ```
+
+### 8.3 Verification Steps
+- Affirm `terraform -chdir=environments/dev apply -auto-approve`
+- Affirm `terraform -chdir=environments/prod apply -auto-approve` (LOCALSTACK_AUTH_TOKEN cần có)
+- Chạy `terraform -chdir=environments/dev destroy -auto-approve` + `terraform -chdir=environments/prod destroy -auto-approve`
 
 ---
 

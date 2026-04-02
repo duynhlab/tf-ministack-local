@@ -34,6 +34,12 @@ variable "nat_gateway_count" {
   default     = 3
 }
 
+variable "enable_waf" {
+  description = "Enable WAF v2 resources (Ministack may have limited support)"
+  type        = bool
+  default     = false
+}
+
 variable "tags" {
   description = "Common tags"
   type        = map(string)

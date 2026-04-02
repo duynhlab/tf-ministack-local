@@ -42,6 +42,12 @@ variable "tgw_asn_region_b" {
   default     = 64513
 }
 
+variable "enable_cross_region_peering" {
+  description = "Enable TGW cross-region peering. Set false for LocalStack (state machine does not complete)."
+  type        = bool
+  default     = true
+}
+
 variable "tags" {
   description = "Common tags"
   type        = map(string)

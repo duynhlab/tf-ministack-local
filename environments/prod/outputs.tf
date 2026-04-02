@@ -1,3 +1,43 @@
+output "edge_vpc_id" {
+  value = module.edge_vpc.vpc_id
+}
+
+output "edge_vpc_cidr" {
+  value = module.edge_vpc.vpc_cidr
+}
+
+output "edge_igw_id" {
+  value = module.edge_vpc.igw_id
+}
+
+output "edge_public_subnet_ids" {
+  value = module.edge_vpc.public_subnet_ids
+}
+
+output "edge_app_subnet_ids" {
+  value = module.edge_vpc.app_subnet_ids
+}
+
+output "edge_data_subnet_ids" {
+  value = module.edge_vpc.data_subnet_ids
+}
+
+output "edge_public_route_table_id" {
+  value = module.edge_vpc.public_route_table_id
+}
+
+output "edge_app_route_table_ids" {
+  value = module.edge_vpc.app_route_table_ids
+}
+
+output "edge_data_route_table_ids" {
+  value = module.edge_vpc.data_route_table_ids
+}
+
+output "edge_nat_gateway_ids" {
+  value = module.edge_vpc.nat_gateway_ids
+}
+
 output "peering_requester_vpc_id" {
   value = module.vpc_peering.requester_vpc_id
 }

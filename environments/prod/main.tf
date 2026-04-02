@@ -2,6 +2,24 @@
 # Prod Environment – Multi-Region Real AWS
 ###############################################################################
 
+# ─── Edge VPC (3-Tier Ingress in Region A) ────────────────────────────────────
+
+module "edge_vpc" {
+  source = "../../modules/vpc-base"
+
+  providers = {
+    aws = aws.ap_southeast_1
+  }
+
+  vpc_name          = var.edge_vpc_name
+  vpc_cidr          = var.edge_vpc_cidr
+  public_subnets    = var.edge_public_subnets
+  app_subnets       = var.edge_app_subnets
+  data_subnets      = var.edge_data_subnets
+  nat_gateway_count = var.edge_nat_gateway_count
+  tags              = var.tags
+}
+
 # ─── VPC Peering (Cross-Region) ──────────────────────────────────────────────
 
 module "vpc_peering" {
@@ -48,9 +66,10 @@ module "transit_gateway" {
     aws.region_b = aws.us_east_1
   }
 
-  spoke_vpcs          = var.tgw_spokes_region_a
-  spoke_vpcs_region_b = var.tgw_spokes_region_b
-  tgw_asn_region_a    = var.tgw_asn_region_a
-  tgw_asn_region_b    = var.tgw_asn_region_b
-  tags                = var.tags
+  spoke_vpcs                  = var.tgw_spokes_region_a
+  spoke_vpcs_region_b         = var.tgw_spokes_region_b
+  tgw_asn_region_a            = var.tgw_asn_region_a
+  tgw_asn_region_b            = var.tgw_asn_region_b
+  enable_cross_region_peering = var.enable_tgw_cross_region_peering
+  tags                        = var.tags
 }

@@ -1,10 +1,13 @@
 Environment,Region,VPC,Subnet Name,CIDR,AZ,Tier,Purpose
 dev,ap-southeast-1,dev-vpc,dev-public-1a,10.100.1.0/24,ap-southeast-1a,Public,ALB/NAT GW/Bastion
 dev,ap-southeast-1,dev-vpc,dev-public-1b,10.100.2.0/24,ap-southeast-1b,Public,ALB/NAT GW/Bastion
+dev,ap-southeast-1,dev-vpc,dev-public-1c,10.100.3.0/24,ap-southeast-1c,Public,ALB/NAT GW/Bastion
 dev,ap-southeast-1,dev-vpc,dev-app-1a,10.100.11.0/24,ap-southeast-1a,Private-App,EC2/ECS/Lambda
 dev,ap-southeast-1,dev-vpc,dev-app-1b,10.100.12.0/24,ap-southeast-1b,Private-App,EC2/ECS/Lambda
+dev,ap-southeast-1,dev-vpc,dev-app-1c,10.100.13.0/24,ap-southeast-1c,Private-App,EC2/ECS/Lambda
 dev,ap-southeast-1,dev-vpc,dev-data-1a,10.100.21.0/24,ap-southeast-1a,Private-Data,RDS/ElastiCache
 dev,ap-southeast-1,dev-vpc,dev-data-1b,10.100.22.0/24,ap-southeast-1b,Private-Data,RDS/ElastiCache
+dev,ap-southeast-1,dev-vpc,dev-data-1c,10.100.23.0/24,ap-southeast-1c,Private-Data,RDS/ElastiCache
 prod,ap-southeast-1,prod-peering-requester,peering-requester-subnet-0,10.0.1.0/24,ap-southeast-1a,Private-App,Peering App
 prod,ap-southeast-1,prod-peering-requester,peering-requester-subnet-1,10.0.2.0/24,ap-southeast-1b,Private-App,Peering App
 prod,us-east-1,prod-peering-accepter,peering-accepter-subnet-0,10.1.1.0/24,us-east-1a,Private-App,Peering App DR
@@ -19,3 +22,9 @@ prod,ap-southeast-1,prod-tgw-spoke-2,tgw-spoke-2-subnet-0,10.5.1.0/24,ap-southea
 prod,ap-southeast-1,prod-tgw-spoke-2,tgw-spoke-2-subnet-1,10.5.2.0/24,ap-southeast-1b,Private-App,TGW Hub Spoke 2
 prod,us-east-1,prod-tgw-spoke-dr,tgw-spoke-dr-subnet-0,10.6.1.0/24,us-east-1a,Private-App,TGW DR Spoke
 prod,us-east-1,prod-tgw-spoke-dr,tgw-spoke-dr-subnet-1,10.6.2.0/24,us-east-1b,Private-App,TGW DR Spoke
+prod,ap-southeast-1,prod-edge-vpc,prod-edge-public-1a,10.7.1.0/24,ap-southeast-1a,Public,Internet ingress/ALB/NAT
+prod,ap-southeast-1,prod-edge-vpc,prod-edge-public-1b,10.7.2.0/24,ap-southeast-1b,Public,Internet ingress/ALB/NAT
+prod,ap-southeast-1,prod-edge-vpc,prod-edge-app-1a,10.7.11.0/24,ap-southeast-1a,Private-App,Application tier
+prod,ap-southeast-1,prod-edge-vpc,prod-edge-app-1b,10.7.12.0/24,ap-southeast-1b,Private-App,Application tier
+prod,ap-southeast-1,prod-edge-vpc,prod-edge-data-1a,10.7.21.0/24,ap-southeast-1a,Private-Data,Database/data tier
+prod,ap-southeast-1,prod-edge-vpc,prod-edge-data-1b,10.7.22.0/24,ap-southeast-1b,Private-Data,Database/data tier

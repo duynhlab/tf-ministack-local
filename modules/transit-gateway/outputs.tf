@@ -29,6 +29,6 @@ output "tgw_attachment_ids_b" {
 }
 
 output "tgw_peering_attachment_id" {
-  description = "TGW cross-region peering attachment ID"
-  value       = aws_ec2_transit_gateway_peering_attachment.cross_region.id
+  description = "TGW cross-region peering attachment ID (null when peering disabled)"
+  value       = var.enable_cross_region_peering ? aws_ec2_transit_gateway_peering_attachment.cross_region[0].id : null
 }

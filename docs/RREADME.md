@@ -336,6 +336,8 @@ This project includes comprehensive test scripts that validate the Terraform imp
 - **Transit Gateway Limitations**: Transit Gateway APIs may be incomplete in current MiniStack release
 - **PrivateLink Limitation**: `aws_vpc_endpoint_service` APIs may be partial; validate before relying on provider-side flows
 
+> **Note:** For a fully detailed matrix of supported services, emulator nuances, and recovery procedures for known issues (like the TGW cross-region peering hang), please refer to [API Support & Limitations](./support.md).
+
 ### Running Tests
 
 ```bash

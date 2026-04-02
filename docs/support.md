@@ -1,8 +1,7 @@
 # MiniStack vs LocalStack — Service Comparison
 
-> Focus: EC2 / Networking · S3 · IAM  
-> MiniStack version: **v1.1.16**
-> LocalStack version: **latest**
+> MiniStack: **v1.1.17**
+> LocalStack Pro: **latest**
 
 ---
 
@@ -307,4 +306,68 @@
 | `DescribeVpcAttribute` | EC2 | ❌ | ✅ | Terraform refresh `aws_vpc` (provider ≥ 5.x) | Patch `ec2.py` hoặc pin provider `~> 4.67` |
 | `DescribeAddressesAttribute` | EC2 | ❌ | ✅ | Terraform refresh `aws_eip` (provider ≥ 5.x) | Patch `ec2.py` hoặc tránh dùng `aws_eip` |
 
+---
+
+## Detailed Limitations and Workarounds
+
+### Environment Context
+| Emulator | Image | Port | Environment |
+|----------|-------|------|-------------|
+| MiniStack | `nahuelnucera/ministack:latest` | `:4566` | `environments/dev` |
+| LocalStack Pro | `localstack/localstack-pro:latest` | `:4567` | `environments/prod` |
+
+### Transit Gateway Cross-Region Peering Hang
+
+**Resource:** `aws_ec2_transit_gateway_peering_attachment_accepter`
+**Observed in:** `environments/prod` on LocalStack Pro
+
+**Symptom**  
+`terraform apply` hangs at: `module.transit_gateway.aws_ec2_transit_gateway_peering_attachment_accepter.cross_region: Still creating...` and never completes.
+
+**Root Cause**  
+1. Terraform provider calls `AcceptTransitGatewayPeeringAttachment` -- LocalStack accepts it and returns `State: available`.
+2. Provider then enters an **internal waiter** that polls `DescribeTransitGatewayPeeringAttachments` waiting for state `available`.
+3. During a concurrent `terraform apply`, the Describe call does not return the expected `available` state from the provider's waiter perspective.
+4. The resource has **no configurable `timeouts {}` block** -- the waiter runs indefinitely.
+
+*Workaround*: Disable cross-region peering in LocalStack environments using variables.
+
+```hcl
+# In environments/prod/terraform.tfvars
+enable_tgw_cross_region_peering = false
+```
+
+### MiniStack Missing EC2 APIs
+
+**Observed in:** `environments/dev` on MiniStack
+
+**Symptom**  
+`terraform apply` fails with `Unknown EC2 action: DescribeVpcAttribute` or `DescribeAddressesAttribute`.
+
+**Root Cause**  
+MiniStack does not implement these API actions called by the Terraform AWS provider during resource refresh.
+
+*Workaround*: Use `terraform destroy -refresh=false -lock=false` to clean up partial state if apply fails, and pin the `hashicorp/aws` provider to `4.x`.
+
+### Recovery Procedures
+
+**After a hung `terraform apply` (LocalStack)**
+```bash
+# 1. Kill the hung process
+kill <PID>
+
+# 2. Kill any lingering provider processes
+ps aux | grep tfprovider | grep -v grep | awk '{print $2}' | xargs -r kill -9
+
+# 3. Remove stale lock file
+rm -f environments/prod/.terraform.tfstate.lock.info
+
+# 4. Destroy with lock bypass
+terraform -chdir=environments/prod destroy -auto-approve -lock=false
+```
+
+**After a failed MiniStack apply**
+```bash
+terraform -chdir=environments/dev destroy -auto-approve -refresh=false -lock=false
+```
 ---

@@ -29,9 +29,8 @@ jobs:
     strategy:
       matrix:
         environment:
-          - environments/vpc-peering
-          - environments/privatelink
-          - environments/transit-gateway
+          - environments/dev
+          - environments/prod
     steps:
       - uses: actions/checkout@v6
 
@@ -53,12 +52,12 @@ jobs:
     strategy:
       matrix:
         directory:
+          - modules/vpc-base
           - modules/vpc-peering
           - modules/privatelink
           - modules/transit-gateway
-          - environments/vpc-peering
-          - environments/privatelink
-          - environments/transit-gateway
+          - environments/dev
+          - environments/prod
     steps:
       - uses: actions/checkout@v6
 
@@ -117,42 +116,56 @@ jobs:
         with:
           terraform_version: "~1.9"
 
-      - name: Start LocalStack
-        if: env.LOCALSTACK_AUTH_TOKEN != ''
+      - name: Start emulators
         run: |
-          docker compose up -d
-          echo "Waiting for LocalStack..."
+          docker compose up -d ministack
+          echo "Waiting for MiniStack..."
           for i in $(seq 1 30); do
             curl -sf http://localhost:4566/_localstack/health > /dev/null 2>&1 && break
             sleep 3
           done
           curl -s http://localhost:4566/_localstack/health | python3 -m json.tool || true
+          if [ -n "${LOCALSTACK_AUTH_TOKEN}" ]; then
+            docker compose up -d localstack_pro
+            echo "Waiting for LocalStack Pro..."
+            for i in $(seq 1 30); do
+              curl -sf http://localhost:4567/_localstack/health > /dev/null 2>&1 && break
+              sleep 3
+            done
+            curl -s http://localhost:4567/_localstack/health | python3 -m json.tool || true
+          else
+            echo "LOCALSTACK_AUTH_TOKEN not set - prod integration test will be skipped."
+          fi
 
-      - name: Test VPC Peering
-        if: env.LOCALSTACK_AUTH_TOKEN != ''
+      - name: Test Dev Environment
         run: |
-          cd environments/vpc-peering
+          cd environments/dev
+          terraform fmt -check
           terraform init -input=false
+          terraform validate
           terraform apply -auto-approve
           terraform output
           terraform destroy -auto-approve
 
-      - name: Test PrivateLink
+      - name: Test Prod Environment
         if: env.LOCALSTACK_AUTH_TOKEN != ''
         run: |
-          cd environments/privatelink
+          cd environments/prod
+          terraform fmt -check
           terraform init -input=false
+          terraform validate
           terraform apply -auto-approve
           terraform output
-          terraform destroy -auto-approve
-
-      - name: Test Transit Gateway
-        if: env.LOCALSTACK_AUTH_TOKEN != ''
-        run: |
-          cd environments/transit-gateway
-          terraform init -input=false
-          terraform apply -auto-approve
-          terraform output
+          terraform output -raw edge_vpc_id > /dev/null
+          terraform output -raw peering_connection_id > /dev/null
+          terraform output -raw privatelink_endpoint_service_name > /dev/null
+          terraform output -raw tgw_id_region_a > /dev/null
+          terraform output -raw tgw_id_region_b > /dev/null
+          terraform state list | grep -q "module.edge_vpc.aws_vpc.this"
+          terraform state list | grep -q "module.vpc_peering.aws_vpc_peering_connection.this"
+          terraform state list | grep -q "module.privatelink.aws_vpc_endpoint_service.this"
+          terraform state list | grep -q "module.transit_gateway.aws_ec2_transit_gateway.region_a"
+          terraform state list | grep -q "module.transit_gateway.aws_ec2_transit_gateway.region_b"
           terraform destroy -auto-approve
 
       - name: Cleanup

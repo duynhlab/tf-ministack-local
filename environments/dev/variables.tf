@@ -11,27 +11,27 @@ variable "vpc_cidr" {
 }
 
 variable "public_subnets" {
-  description = "Public subnet CIDRs (2 AZs)"
+  description = "Public subnet CIDRs (3 AZs)"
   type        = list(string)
-  default     = ["10.100.1.0/24", "10.100.2.0/24"]
+  default     = ["10.100.1.0/24", "10.100.2.0/24", "10.100.3.0/24"]
 }
 
 variable "app_subnets" {
-  description = "App (private) subnet CIDRs (2 AZs)"
+  description = "App (private) subnet CIDRs (3 AZs)"
   type        = list(string)
-  default     = ["10.100.11.0/24", "10.100.12.0/24"]
+  default     = ["10.100.11.0/24", "10.100.12.0/24", "10.100.13.0/24"]
 }
 
 variable "data_subnets" {
-  description = "Data (private) subnet CIDRs (2 AZs)"
+  description = "Data (private) subnet CIDRs (3 AZs)"
   type        = list(string)
-  default     = ["10.100.21.0/24", "10.100.22.0/24"]
+  default     = ["10.100.21.0/24", "10.100.22.0/24", "10.100.23.0/24"]
 }
 
 variable "nat_gateway_count" {
-  description = "Number of NAT Gateways (1 = cost-saving, 2 = HA)"
+  description = "Number of NAT Gateways (3 = HA Emulation)"
   type        = number
-  default     = 1
+  default     = 3
 }
 
 variable "tags" {

@@ -2,7 +2,7 @@
 
 ## 1. Introduction
 
-This report analyzes three primary AWS VPC connectivity solutions for enterprise use, focusing on cross-region and multi-account scenarios. All implementations are tested on LocalStack to validate Terraform code without incurring AWS costs.
+This report analyzes three primary AWS VPC connectivity solutions for enterprise use, focusing on cross-region and multi-account scenarios. All implementations are tested on MiniStack to validate Terraform code without incurring AWS costs.
 
 **Current context**: Single AWS Account, multi-region deployment. Planning for future multi-account migration.
 
@@ -249,16 +249,16 @@ graph TD
 Given the current setup (single account, multi-region):
 
 ### Short-term / Development (Dev Environment):
-**Sử dụng module `vpc-base` tại 1 Region (ap-southeast-1)**.
-- Triển khai 1 VPC duy nhất với 3-tier subnets (Public, App, Data)
-- Sử dụng 1 NAT Gateway để tiết kiệm chi phí
-- Đủ để phát triển và kiểm thử mà không cần network phức tạp
+**Utilize the `vpc-base` module in 1 Region (ap-southeast-1)**.
+- Deploy a single VPC with a 3-tier subnet architecture (Public, App, Data)
+- Run across 3 Availability Zones with 3 NAT Gateways for High Availability
+- Sufficient for exhaustive development and testing without overly complex networking
 
-### Môi trường Production (Multi-Region Prod Environment):
-**Kết hợp cả 3 kỹ thuật cho kiến trúc phức tạp trên AWS (đã triển khai)**.
-- Dùng **VPC Peering** cho kết nối hai Application VPC giữa Singapore và N. Virginia.
-- Dùng **Transit Gateway** làm trục trung tâm mỗi region kết nối App, Data, Spoke VPCs.
-- Dùng **PrivateLink** để expose shared service nội bộ một cách an toàn mà không cần mở kết nối peering.
+### Production Environment (Multi-Region Prod Environment):
+**Combine all 3 networking techniques for complex AWS architecture (Deployed)**.
+- Use **VPC Peering** for direct connection between two Application VPCs across Singapore and N. Virginia.
+- Use **Transit Gateway** as the central hub in each region to connect App, Data, and Spoke VPCs.
+- Use **PrivateLink** to expose internal shared services securely without opening a peering connection.
 
 ### Migration path:
 ```
@@ -290,18 +290,15 @@ Phase 3:     Multi-account with TGW shared via RAM
 
 ---
 
-## 7. LocalStack Testing & Validation
+## 7. MiniStack Testing & Validation
 
-This project includes comprehensive test scripts that validate the Terraform implementations on LocalStack Pro. The tests verify both resource creation and configuration correctness.
+This project includes comprehensive test scripts that validate the Terraform implementations on MiniStack. The tests verify both resource creation and configuration correctness.
 
 ### Test Scripts Overview
 
 | Script | Tests | Validation Points |
 |---|---|---|
-| `test-vpc-peering.sh` | Cross-region VPC peering | Peering status, VPC existence, route table entries, security groups |
-| `test-privatelink.sh` | PrivateLink service exposure | Endpoint service state, VPC endpoint availability, NLB configuration |
-| `test-transit-gateway.sh` | Transit Gateway hub-and-spoke | TGW availability, attachment states, cross-region peering, route propagation |
-| `test-all.sh` | Full test suite | Runs all individual tests sequentially |
+| `test-all.sh` | Dev + Prod integration | Init/apply/output/destroy for `environments/dev` and `environments/prod` (prod requires token) |
 
 ### What Tests Validate
 
@@ -323,7 +320,7 @@ This project includes comprehensive test scripts that validate the Terraform imp
 - Provider aliases work correctly for multi-region deployments
 - Resource dependencies are properly modeled
 
-### LocalStack Pro Features Used
+### MiniStack Features Used
 
 - **EC2 Service**: Full VPC, subnet, route table, security group, peering support
 - **ELBv2**: Network Load Balancer for PrivateLink
@@ -333,46 +330,68 @@ This project includes comprehensive test scripts that validate the Terraform imp
 ### Limitations & Notes
 
 - **Control Plane Only**: Tests validate AWS API responses, not actual network packet flow
-- **Instant State Changes**: LocalStack may return resources as "available" immediately vs. real AWS timing
+- **Instant State Changes**: MiniStack may return resources as "available" immediately vs. real AWS timing
 - **No Data Plane Traffic**: Cannot test actual ICMP/TCP connectivity between VPCs
 - **Simulated Cross-Region**: All regions run in one container for testing convenience
+- **Transit Gateway Limitations**: Transit Gateway APIs may be incomplete in current MiniStack release
+- **PrivateLink Limitation**: `aws_vpc_endpoint_service` APIs may be partial; validate before relying on provider-side flows
 
 ### Running Tests
 
 ```bash
-# Set LocalStack auth token
-export LOCALSTACK_AUTH_TOKEN=your_token
-
-# Run individual tests
-./scripts/test-vpc-peering.sh
-./scripts/test-privatelink.sh
-./scripts/test-transit-gateway.sh
-
-# Run full suite
+# Run full suite (dev always, prod when LOCALSTACK_AUTH_TOKEN is set)
 ./scripts/test-all.sh
 ```
 
-Tests use AWS CLI with LocalStack endpoints and dummy credentials for API validation.
+Tests use AWS CLI with MiniStack endpoints and dummy credentials for API validation.
 
 ---
 
-## 8. Real AWS Deployment
+## 8. Enterprise MiniStack Emulation 
 
-Bên cạnh mô trường LocalStack dùng để kiểm thử tính khả thi, dự án đã được triển khai lên **Real AWS** với thiết kế hoàn chỉnh.
+Instead of deploying directly onto Real AWS, this entire project is targeting **MiniStack enterprise emulation**, incorporating realistic settings for learning and training purposes.
 
-### Thiết kế IP / Subnet
-Chúng tôi áp dụng mô hình phân tách hoàn toàn các block IP cho 7 VPC khác nhau trên 2 Region nhằm tránh xung đột IP.
+### IP / Subnet Design
+We apply a strict separation model for IP blocks across 7 different VPCs in 2 Regions to avoid IP overlap.
 
-*Xem chi tiết bảng quy hoạch IP tại file [subnet.csv](file:///home/duydo/Working/duynhne/tf-test/docs/subnet.csv)*.
+*See detailed IP allocation plan in [subnet.csv](file:///home/duydo/Working/duynhne/tf-test/docs/subnet.csv)*.
 
-### 8.1 Dev Environment
-Môi trường Development đơn giản chỉ chứa 1 VPC nằm ở `ap-southeast-1` (Singapore). Nó áp dụng module `vpc-base`:
-- **Kiến trúc 3-tier**: `Public` (cho ALB/IGW), `Private App` (cho EC2/EKS), `Private Data` (RDS/ElastiCache)
-- **High Availability**: Các subnets trải đều qua 2 Availability Zones (`ap-southeast-1a`, `ap-southeast-1b`)
-- **Cost Saving**: Sử dụng chung 1 NAT Gateway thay vì 2 cái.
+### 8.1 Dev Environment (3-AZ Full Setup)
+The Development environment contains 1 VPC located in `ap-southeast-1` (Singapore). It applies the `vpc-base` module with a standard enterprise emulation configuration:
+- **3-tier Architecture**: `Public` (ALB/IGW), `Private App` (EC2/EKS), `Private Data` (RDS)
+- **High Availability**: Subnets are spread across **3 Availability Zones** (`ap-southeast-1a`, `ap-southeast-1b`, `ap-southeast-1c`).
+- **Realistic emulation**: Runs 3 NAT Gateways to fully cover the public layer.
 
-### 8.2 Prod Environment (Multi-Region)
-Được triển khai trên `ap-southeast-1` (Singapore) và `us-east-1` (N.Virginia) kết hợp toàn bộ 3 pattern connectivity.
+```mermaid
+graph TD
+    subgraph "ap-southeast-1 (MiniStack)"
+        IGW[Internet Gateway]
+        
+        subgraph "VPC: dev-vpc (10.100.0.0/16)"
+            subgraph "AZ: ap-southeast-1a"
+                PUB_1A[Public Subnet 1A] --> NAT_1A[NAT GW 1A]
+                APP_1A[Private App 1A] --> NAT_1A
+                DATA_1A[Private Data 1A]
+            end
+            
+            subgraph "AZ: ap-southeast-1b"
+                PUB_1B[Public Subnet 1B] --> NAT_1B[NAT GW 1B]
+                APP_1B[Private App 1B] --> NAT_1B
+                DATA_1B[Private Data 1B]
+            end
+            
+            subgraph "AZ: ap-southeast-1c"
+                PUB_1C[Public Subnet 1C] --> NAT_1C[NAT GW 1C]
+                APP_1C[Private App 1C] --> NAT_1C
+                DATA_1C[Private Data 1C]
+            end
+        end
+        IGW --- PUB_1A & PUB_1B & PUB_1C
+    end
+```
+
+### 8.2 Prod Environment (Multi-Region / Emulation Features)
+Deployed across `ap-southeast-1` (Singapore) and `us-east-1` (N. Virginia) on MiniStack, combining all 3 connectivity patterns. This environment simulates Cross-region links, HUB-Spoke design, and VPC Endpoints in local emulation.
 
 ```mermaid
 graph TD
@@ -430,14 +449,13 @@ modules/
 
 ### Environment Configurations
 
-```
+```text
 environments/
-├── dev/                  # Real AWS Dev (Singapore)
-├── prod/                 # Real AWS Prod (Multi-region: SG, US-East)
-├── vpc-peering/          # Test environment for peering (LocalStack)
-├── privatelink/          # Test environment for PrivateLink (LocalStack)
-└── transit-gateway/      # Test environment for TGW (LocalStack)
+├── dev/                  # MiniStack Emulation Dev (Singapore, 3 AZs)
+└── prod/                 # LocalStack Pro Emulation Prod (Multi-region: SG, US-East)
 ```
+
+Note: architecture sections still describe VPC Peering, PrivateLink, and Transit Gateway patterns; these are now composed through `environments/prod` rather than standalone environment roots.
 
 Each environment includes:
 - `main.tf`: Root module with provider configurations
@@ -487,7 +505,7 @@ resource "aws_vpc_peering_connection_accepter" "this" {
 
 ### Cost Optimization
 
-- **LocalStack Testing**: Zero AWS costs for development/testing
+- **MiniStack Testing**: Zero AWS costs for development/testing
 - **Resource Tagging**: Consistent tagging for cost allocation
 - **Modular Design**: Reusable modules across environments
 
@@ -495,13 +513,13 @@ resource "aws_vpc_peering_connection_accepter" "this" {
 
 ## 10. Summary Table
 
-| Solution | Complexity | Cost | Scalability | Security | Áp dụng tại |
+| Solution | Complexity | Cost | Scalability | Security | Applied To |
 |---|---|---|---|---|---|
-| Module `vpc-base` | Thấp | Thấp | Thấp (đơn lẻ) | 3-tier standard | `environments/dev` |
+| Module `vpc-base` | Low | Low | Low (standalone) | 3-tier standard | `environments/dev` |
 | VPC Peering | Low | Low | Poor (O(n²)) | Coarse | `environments/prod` (Cross-Region App) |
 | PrivateLink | Medium | Medium | Excellent | Fine-grained | `environments/prod` (Service endpoint) |
 | Transit Gateway | High | High | Excellent (O(n)) | Centralized | `environments/prod` (Cross-region spokes) |
 
 ---
 
-*Report generated as part of VPC Connectivity Lab – terraform-aws-localstack*
+*Report generated as part of VPC Connectivity Lab – terraform-aws-ministack*

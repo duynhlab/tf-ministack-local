@@ -7,6 +7,38 @@ variable "tags" {
   }
 }
 
+# ─── Edge 3-Tier VPC Variables ────────────────────────────────────────────────
+
+variable "edge_vpc_name" {
+  type    = string
+  default = "prod-edge-vpc"
+}
+
+variable "edge_vpc_cidr" {
+  type    = string
+  default = "10.7.0.0/16"
+}
+
+variable "edge_public_subnets" {
+  type    = list(string)
+  default = ["10.7.1.0/24", "10.7.2.0/24"]
+}
+
+variable "edge_app_subnets" {
+  type    = list(string)
+  default = ["10.7.11.0/24", "10.7.12.0/24"]
+}
+
+variable "edge_data_subnets" {
+  type    = list(string)
+  default = ["10.7.21.0/24", "10.7.22.0/24"]
+}
+
+variable "edge_nat_gateway_count" {
+  type    = number
+  default = 2
+}
+
 # ─── Peering Variables ────────────────────────────────────────────────────────
 
 variable "peering_requester_cidr" {
@@ -91,4 +123,10 @@ variable "tgw_asn_region_a" {
 variable "tgw_asn_region_b" {
   type    = number
   default = 64513
+}
+
+variable "enable_tgw_cross_region_peering" {
+  description = "Enable TGW cross-region peering (set false for LocalStack Pro)"
+  type        = bool
+  default     = false
 }

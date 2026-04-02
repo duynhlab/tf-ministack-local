@@ -16,18 +16,20 @@ fi
 
 echo "=== VPC Connectivity Lab – Teardown ==="
 
-# Destroy each environment
-for env in vpc-peering privatelink transit-gateway; do
-  if [ -d "$ENV_DIR/$env/.terraform" ]; then
-    echo "[*] Destroying $env..."
-    cd "$ENV_DIR/$env"
-    terraform destroy -auto-approve 2>/dev/null || true
-  fi
-done
+if [ "${CONFIRM_DESTROY:-0}" = "1" ]; then
+  for env in dev prod; do
+    if [ -d "$ENV_DIR/$env/.terraform" ]; then
+      echo "[*] Destroying $env..."
+      cd "$ENV_DIR/$env"
+      terraform destroy -auto-approve || true
+    fi
+  done
+else
+  echo "[*] Skipping terraform destroy. Set CONFIRM_DESTROY=1 to enable cleanup."
+fi
 
-# Stop LocalStack
-echo "[*] Stopping LocalStack..."
+echo "[*] Stopping emulator containers..."
 cd "$PROJECT_DIR"
-$DC down -v 2>/dev/null || true
+$DC down -v || true
 
 echo "Done."

@@ -294,7 +294,13 @@ data "aws_region" "b" {
   provider = aws.region_b
 }
 
+# NOTE: LocalStack Pro limitation — AcceptTransitGatewayPeeringAttachment is
+# accepted but the Terraform provider's internal waiter polls indefinitely
+# because DescribeTransitGatewayPeeringAttachments never returns "available"
+# under concurrent apply. Guard with enable_cross_region_peering.
+
 resource "aws_ec2_transit_gateway_peering_attachment" "cross_region" {
+  count                   = var.enable_cross_region_peering ? 1 : 0
   provider                = aws.region_a
   transit_gateway_id      = aws_ec2_transit_gateway.region_a.id
   peer_transit_gateway_id = aws_ec2_transit_gateway.region_b.id
@@ -304,8 +310,9 @@ resource "aws_ec2_transit_gateway_peering_attachment" "cross_region" {
 }
 
 resource "aws_ec2_transit_gateway_peering_attachment_accepter" "cross_region" {
+  count                         = var.enable_cross_region_peering ? 1 : 0
   provider                      = aws.region_b
-  transit_gateway_attachment_id = aws_ec2_transit_gateway_peering_attachment.cross_region.id
+  transit_gateway_attachment_id = aws_ec2_transit_gateway_peering_attachment.cross_region[0].id
 
   tags = merge(var.tags, { Name = "tgw-peering-b-accept" })
 }

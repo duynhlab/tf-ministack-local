@@ -23,7 +23,7 @@ data "aws_availability_zones" "available" {
 }
 
 locals {
-  azs = slice(data.aws_availability_zones.available.names, 0, 2)
+  azs = slice(data.aws_availability_zones.available.names, 0, length(var.public_subnets))
 }
 
 # ─── VPC ─────────────────────────────────────────────────────────────────────
@@ -123,7 +123,7 @@ resource "aws_route" "app_nat" {
   count                  = length(var.app_subnets)
   route_table_id         = aws_route_table.app[count.index].id
   destination_cidr_block = "0.0.0.0/0"
-  nat_gateway_id         = aws_nat_gateway.this[min(count.index, var.nat_gateway_count - 1)].id
+  nat_gateway_id         = aws_nat_gateway.this[var.nat_gateway_count == 1 ? 0 : count.index].id
 }
 
 resource "aws_route_table_association" "app" {

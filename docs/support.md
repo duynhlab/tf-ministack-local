@@ -141,6 +141,13 @@
 | DescribeImages | ✅ | ✅ | v1.0.0+ | |
 | DescribeInstanceAttribute | ✅ | ✅ | v1.1.14 | Fix Terraform AWS Provider ≥ 6.0.0; hỗ trợ instanceType, userData, blockDeviceMapping, groupSet, v.v. |
 | DescribeInstanceTypes | ✅ | ✅ | v1.1.14 | 12 instance families: t2, t3, m5, c5, r5, p3, v.v. |
+| DescribeInstanceCreditSpecifications | ✅ | ✅ | v1.1.17 | Terraform v6 provider compatible stub for CPU credits |
+| DescribeInstanceMaintenanceOptions | ✅ | ✅ | v1.1.17 | Terraform v6 provider compatibility stub |
+| DescribeInstanceAutoRecoveryAttribute | ✅ | ✅ | v1.1.17 | Terraform v6 provider compatibility stub |
+| ModifyInstanceMaintenanceOptions | ✅ | ✅ | v1.1.17 | Terraform v6 provider compatibility stub |
+| DescribeInstanceTopology | ✅ | ✅ | v1.1.17 | Terraform v6 provider compatibility stub |
+| DescribeSpotInstanceRequests | ✅ | ✅ | v1.1.17 | Terraform v6 provider compatibility stub |
+| DescribeCapacityReservations | ✅ | ✅ | v1.1.17 | Terraform v6 provider compatibility stub |
 | DescribeAvailabilityZones | ✅ | ✅ | v1.0.0+ | |
 | DescribeTags / CreateTags / DeleteTags | ✅ | ✅ | v1.0.0+ | |
 

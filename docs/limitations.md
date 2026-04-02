@@ -9,6 +9,11 @@ Observed behavior for every AWS resource/API used in this project's four modules
 | MiniStack | `nahuelnucera/ministack:latest` | `:4566` | `environments/dev` |
 | LocalStack Pro | `localstack/localstack-pro:latest` | `:4567` | `environments/prod` |
 
+### MiniStack releases
+- v1.1.16: missing `DescribeVpcAttribute`, `DescribeAddressesAttribute` for EC2.
+- v1.1.17: adds Terraform v6 EC2 stubs and `DescribeInstanceCreditSpecifications`.
+  - still missing (as of 1.1.17): `DescribeVpcAttribute`, `DescribeAddressesAttribute`.
+
 ---
 
 ## Resource Compatibility Matrix

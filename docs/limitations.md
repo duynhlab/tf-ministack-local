@@ -24,6 +24,7 @@ Observed behavior for every AWS resource/API used in this project's four modules
 | VPC Core | `data "aws_availability_zones"` | Works | Works | |
 | EC2 API | `DescribeVpcAttribute` | **Fails** (`InvalidAction: Unknown EC2 action`) | Works | MiniStack does not implement this API; causes `terraform apply` to error during resource refresh |
 | EC2 API | `DescribeAddressesAttribute` | **Fails** (`InvalidAction: Unknown EC2 action`) | Works | Same root cause as above |
+| Provider compatibility | `hashicorp/aws` 4.x | ✅ | ✅ | Required for MiniStack due missing EC2 API actions (`DescribeVpcAttribute`, `DescribeAddressesAttribute`) |
 | VPC Peering | `aws_vpc_peering_connection` | Not tested (dev is single-region) | Works | |
 | VPC Peering | `aws_vpc_peering_connection_accepter` (`auto_accept = true`) | Not tested | Works | Completes instantly; no polling waiter |
 | VPC Peering | Cross-region routes (`aws_route` with `vpc_peering_connection_id`) | Not tested | Works | |

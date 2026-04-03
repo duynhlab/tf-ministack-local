@@ -1,6 +1,6 @@
 # MiniStack vs LocalStack — Service Comparison
 
-> MiniStack: **v1.1.17**
+> MiniStack: **v1.1.25**
 > LocalStack Pro: **latest**
 
 ---
@@ -68,7 +68,7 @@
 | PutObjectLegalHold | ✅ | ✅ | v1.0.0+ | |
 | GetObjectLegalHold | ✅ | ✅ | v1.0.0+ | |
 | S3 disk persistence | ✅ | ✅ | v1.0.0+ | MiniStack: `S3_PERSIST=1` — LocalStack Pro: bật mặc định |
-| S3 Control ListTagsForResource | ✅ | ✅ | v1.1.14 | MiniStack fix: trả đúng tags thay vì empty list |
+| S3 Control ListTagsForResource | ✅ | ✅ | v1.1.14 | MiniStack fix: trả đúng tags thay vì empty list; routing fixed in v1.1.18 |
 
 ---
 
@@ -171,13 +171,13 @@
 | DescribeImages | ✅ | ✅ | v1.0.0+ | |
 | DescribeInstanceAttribute | ✅ | ✅ | v1.1.14 | Fix Terraform AWS Provider ≥ 6.0.0; hỗ trợ instanceType, userData, blockDeviceMapping, groupSet, v.v. |
 | DescribeInstanceTypes | ✅ | ✅ | v1.1.14 | 12 instance families: t2, t3, m5, c5, r5, p3, v.v. |
-| DescribeInstanceCreditSpecifications | ✅ | ✅ | v1.1.17 | Terraform v6 provider compatible stub for CPU credits |
-| DescribeInstanceMaintenanceOptions | ✅ | ✅ | v1.1.17 | Terraform v6 provider compatibility stub |
-| DescribeInstanceAutoRecoveryAttribute | ✅ | ✅ | v1.1.17 | Terraform v6 provider compatibility stub |
-| ModifyInstanceMaintenanceOptions | ✅ | ✅ | v1.1.17 | Terraform v6 provider compatibility stub |
-| DescribeInstanceTopology | ✅ | ✅ | v1.1.17 | Terraform v6 provider compatibility stub |
-| DescribeSpotInstanceRequests | ✅ | ✅ | v1.1.17 | Terraform v6 provider compatibility stub |
-| DescribeCapacityReservations | ✅ | ✅ | v1.1.17 | Terraform v6 provider compatibility stub |
+| DescribeInstanceCreditSpecifications | ✅ | ✅ | v1.1.18 | Terraform v6 provider compatible stub for CPU credits |
+| DescribeInstanceMaintenanceOptions | ✅ | ✅ | v1.1.18 | Terraform v6 provider compatibility stub |
+| DescribeInstanceAutoRecoveryAttribute | ✅ | ✅ | v1.1.18 | Terraform v6 provider compatibility stub |
+| ModifyInstanceMaintenanceOptions | ✅ | ✅ | v1.1.18 | Terraform v6 provider compatibility stub |
+| DescribeInstanceTopology | ✅ | ✅ | v1.1.18 | Terraform v6 provider compatibility stub |
+| DescribeSpotInstanceRequests | ✅ | ✅ | v1.1.18 | Terraform v6 provider compatibility stub |
+| DescribeCapacityReservations | ✅ | ✅ | v1.1.18 | Terraform v6 provider compatibility stub |
 | DescribeAvailabilityZones | ✅ | ✅ | v1.0.0+ | |
 | DescribeTags / CreateTags / DeleteTags | ✅ | ✅ | v1.0.0+ | |
 
@@ -187,12 +187,12 @@
 
 | Operation | MiniStack | LocalStack Pro | MiniStack Version | Notes |
 |---|---|---|---|---|
-| CreateSecurityGroup | ✅ | ✅ | v1.0.0+ | Default SG luôn có sẵn |
+| CreateSecurityGroup | ✅ | ✅ | v1.0.0+ | Default SG luôn có sẵn; non-default SGs include allow-all egress rule (fixed in v1.1.18) |
 | DeleteSecurityGroup | ✅ | ✅ | v1.0.0+ | |
 | DescribeSecurityGroups | ✅ | ✅ | v1.0.0+ | |
-| AuthorizeSecurityGroupIngress | ✅ | ✅ | v1.0.0+ | Rules stored, không enforced trên cả 2 |
+| AuthorizeSecurityGroupIngress | ✅ | ✅ | v1.0.0+ | Rules stored, không enforced trên cả 2; deduplication fixed in v1.1.18 |
 | RevokeSecurityGroupIngress | ✅ | ✅ | v1.0.0+ | |
-| AuthorizeSecurityGroupEgress | ✅ | ✅ | v1.0.0+ | |
+| AuthorizeSecurityGroupEgress | ✅ | ✅ | v1.0.0+ | Rules stored, không enforced trên cả 2; deduplication fixed in v1.1.18 |
 | RevokeSecurityGroupEgress | ✅ | ✅ | v1.0.0+ | |
 
 ---
@@ -215,7 +215,7 @@
 | DescribeVpcEndpoints | ✅ | ✅ | v1.0.0+ | |
 | CreateVpcPeeringConnection | ✅ | ✅ | v1.0.0+ | |
 | AcceptVpcPeeringConnection | ✅ | ✅ | v1.0.0+ | |
-| DescribeVpcPeeringConnections | ✅ | ✅ | v1.0.0+ | |
+| DescribeVpcPeeringConnections | ✅ | ✅ | v1.0.0+ | Region field in requesterVpcInfo/accepterVpcInfo fixed in v1.1.18 |
 | DeleteVpcPeeringConnection | ✅ | ✅ | v1.0.0+ | |
 
 ---
@@ -337,6 +337,8 @@
 | `DescribeVpcAttribute` | EC2 | ❌ | ✅ | Terraform refresh `aws_vpc` (provider ≥ 5.x) | Patch `ec2.py` hoặc pin provider `~> 4.67` |
 | `DescribeAddressesAttribute` | EC2 | ❌ | ✅ | Terraform refresh `aws_eip` (provider ≥ 5.x) | Patch `ec2.py` hoặc tránh dùng `aws_eip` |
 
+*Note: Checked MiniStack releases up to v1.1.25 — these APIs are still not supported*
+
 ---
 
 ## Detailed Limitations and Workarounds
@@ -346,6 +348,12 @@
 |----------|-------|------|-------------|
 | MiniStack | `nahuelnucera/ministack:latest` | `:4566` | `environments/dev` |
 | LocalStack Pro | `localstack/localstack-pro:latest` | `:4567` | `environments/prod` |
+
+### State Persistence (v1.1.25+)
+MiniStack now supports state persistence for 10 services when `PERSIST_STATE=1`:
+- SQS, SNS, SSM, SecretsManager, IAM, DynamoDB, KMS, EventBridge, CloudWatch Logs, and Kinesis
+- State is saved on shutdown and restored on startup via atomic JSON files
+- S3 persistence remains separate via `S3_PERSIST=1`
 
 ### Transit Gateway Cross-Region Peering Hang
 
@@ -379,26 +387,3 @@ enable_tgw_cross_region_peering = false
 MiniStack does not implement these API actions called by the Terraform AWS provider during resource refresh.
 
 *Workaround*: Use `terraform destroy -refresh=false -lock=false` to clean up partial state if apply fails, and pin the `hashicorp/aws` provider to `4.x`.
-
-### Recovery Procedures
-
-**After a hung `terraform apply` (LocalStack)**
-```bash
-# 1. Kill the hung process
-kill <PID>
-
-# 2. Kill any lingering provider processes
-ps aux | grep tfprovider | grep -v grep | awk '{print $2}' | xargs -r kill -9
-
-# 3. Remove stale lock file
-rm -f environments/prod/.terraform.tfstate.lock.info
-
-# 4. Destroy with lock bypass
-terraform -chdir=environments/prod destroy -auto-approve -lock=false
-```
-
-**After a failed MiniStack apply**
-```bash
-terraform -chdir=environments/dev destroy -auto-approve -refresh=false -lock=false
-```
----

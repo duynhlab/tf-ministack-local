@@ -185,6 +185,15 @@ When behavior differs from AWS:
 - No secrets in `.tf` or `terraform.tfvars`; keep `.tfstate` ignored.
 - `LOCALSTACK_AUTH_TOKEN` only via environment / CI secrets.
 
+### Resource tagging (AWS) — always apply
+
+When adding or editing Terraform under `modules/`, follow the same pattern as existing modules (see [docs/README.md](docs/README.md), section *Resource tagging (AWS)*):
+
+- In each module, define `local.module_label = basename(abspath(path.module))` and `local.default_tags = merge(var.tags, { TerraformModule = local.module_label })`.
+- Use `merge(local.default_tags, { Name = ... })` (and any other per-resource tags) on resources that support `tags`. **Do not** hardcode the module name in `TerraformModule`; always derive it with `basename(abspath(path.module))`.
+- New modules must include this `locals` block and pass `var.tags` from the root module as today.
+- Root environments continue to set `default_tags` on the `aws` provider for `Project`, `Environment`, `ManagedBy`; do not duplicate those keys unnecessarily on every resource unless your change requires an override.
+
 ---
 
 ## Linting (tflint)

@@ -13,6 +13,11 @@ terraform {
   }
 }
 
+locals {
+  module_label = basename(abspath(path.module))
+  default_tags = merge(var.tags, { TerraformModule = local.module_label })
+}
+
 resource "aws_wafv2_ip_set" "this" {
   name               = var.ip_set_name
   scope              = var.scope
@@ -20,7 +25,7 @@ resource "aws_wafv2_ip_set" "this" {
   ip_address_version = "IPV4"
   addresses          = var.ip_addresses
 
-  tags = var.tags
+  tags = local.default_tags
 }
 
 resource "aws_wafv2_web_acl" "this" {
@@ -60,7 +65,7 @@ resource "aws_wafv2_web_acl" "this" {
     metric_name                = "${var.web_acl_name}-metric"
   }
 
-  tags = var.tags
+  tags = local.default_tags
 }
 
 resource "aws_wafv2_web_acl_association" "this" {

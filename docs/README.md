@@ -6,6 +6,21 @@ This report analyzes three primary AWS VPC connectivity solutions for enterprise
 
 **Current context**: Single AWS Account, multi-region deployment. Planning for future multi-account migration.
 
+### 1.1 Resource tagging (AWS)
+
+Tagging follows the same *merge-and-identify* idea as common Terraform adapted to **AWS resource tags** in this repo:
+
+- **Root / provider**: Each environment’s `provider "aws"` uses `default_tags` for cross-cutting keys (`Project`, `Environment`, `ManagedBy`).
+- **Modules**: Every module under `modules/` defines `local.default_tags = merge(var.tags, { TerraformModule = basename(abspath(path.module)) })` so each resource merged with `local.default_tags` carries the **folder name** of the module (e.g. `vpc-base`, `privatelink`) without hardcoding. Per-resource `Name` tags stay on individual resources.
+
+| Tag | Where set | Purpose |
+|-----|-----------|---------|
+| `Project`, `Environment`, `ManagedBy` | `default_tags` in `environments/*/providers.tf` | Lab-wide identity and ownership |
+| `TerraformModule` | `local.default_tags` in each module | Which Terraform module created the resource |
+| `Name` | Per-resource `merge(local.default_tags, { Name = ... })` | Human-readable resource name |
+
+You can extend `var.tags` at the environment level with keys such as `Team` or `CostCenter` on real AWS accounts; enable those keys in **Cost allocation tags** if you use Cost Explorer.
+
 ---
 
 ## 2. Architecture Diagrams

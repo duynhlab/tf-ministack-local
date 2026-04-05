@@ -24,6 +24,9 @@ data "aws_availability_zones" "available" {
 
 locals {
   azs = slice(data.aws_availability_zones.available.names, 0, length(var.public_subnets))
+
+  module_label = basename(abspath(path.module))
+  default_tags = merge(var.tags, { TerraformModule = local.module_label })
 }
 
 # ─── VPC ─────────────────────────────────────────────────────────────────────
@@ -34,7 +37,7 @@ resource "aws_vpc" "this" {
   enable_dns_support   = true
   enable_dns_hostnames = true
 
-  tags = merge(var.tags, { Name = var.vpc_name })
+  tags = merge(local.default_tags, { Name = var.vpc_name })
 }
 
 # ─── Internet Gateway ────────────────────────────────────────────────────────
@@ -42,7 +45,7 @@ resource "aws_vpc" "this" {
 resource "aws_internet_gateway" "this" {
   vpc_id = aws_vpc.this.id
 
-  tags = merge(var.tags, { Name = "${var.vpc_name}-igw" })
+  tags = merge(local.default_tags, { Name = "${var.vpc_name}-igw" })
 }
 
 # ─── Public Subnets ──────────────────────────────────────────────────────────
@@ -55,7 +58,7 @@ resource "aws_subnet" "public" {
   #tfsec:ignore:aws-ec2-no-public-ip-subnet (Lab env requires public subnet)
   map_public_ip_on_launch = true
 
-  tags = merge(var.tags, {
+  tags = merge(local.default_tags, {
     Name = "${var.vpc_name}-public-${local.azs[count.index]}"
     Tier = "Public"
   })
@@ -64,7 +67,7 @@ resource "aws_subnet" "public" {
 resource "aws_route_table" "public" {
   vpc_id = aws_vpc.this.id
 
-  tags = merge(var.tags, { Name = "${var.vpc_name}-public-rt" })
+  tags = merge(local.default_tags, { Name = "${var.vpc_name}-public-rt" })
 }
 
 resource "aws_route" "public_internet" {
@@ -84,7 +87,7 @@ resource "aws_route_table_association" "public" {
 resource "aws_eip" "nat" {
   count = var.nat_gateway_count
 
-  tags = merge(var.tags, { Name = "${var.vpc_name}-nat-eip-${count.index}" })
+  tags = merge(local.default_tags, { Name = "${var.vpc_name}-nat-eip-${count.index}" })
 }
 
 resource "aws_nat_gateway" "this" {
@@ -92,7 +95,7 @@ resource "aws_nat_gateway" "this" {
   allocation_id = aws_eip.nat[count.index].id
   subnet_id     = aws_subnet.public[count.index].id
 
-  tags = merge(var.tags, { Name = "${var.vpc_name}-nat-${count.index}" })
+  tags = merge(local.default_tags, { Name = "${var.vpc_name}-nat-${count.index}" })
 
   depends_on = [aws_internet_gateway.this]
 }
@@ -105,7 +108,7 @@ resource "aws_subnet" "app" {
   cidr_block        = var.app_subnets[count.index]
   availability_zone = local.azs[count.index]
 
-  tags = merge(var.tags, {
+  tags = merge(local.default_tags, {
     Name = "${var.vpc_name}-app-${local.azs[count.index]}"
     Tier = "Private-App"
   })
@@ -115,7 +118,7 @@ resource "aws_route_table" "app" {
   count  = length(var.app_subnets)
   vpc_id = aws_vpc.this.id
 
-  tags = merge(var.tags, { Name = "${var.vpc_name}-app-rt-${count.index}" })
+  tags = merge(local.default_tags, { Name = "${var.vpc_name}-app-rt-${count.index}" })
 }
 
 resource "aws_route" "app_nat" {
@@ -139,7 +142,7 @@ resource "aws_subnet" "data" {
   cidr_block        = var.data_subnets[count.index]
   availability_zone = local.azs[count.index]
 
-  tags = merge(var.tags, {
+  tags = merge(local.default_tags, {
     Name = "${var.vpc_name}-data-${local.azs[count.index]}"
     Tier = "Private-Data"
   })
@@ -149,7 +152,7 @@ resource "aws_route_table" "data" {
   count  = length(var.data_subnets)
   vpc_id = aws_vpc.this.id
 
-  tags = merge(var.tags, { Name = "${var.vpc_name}-data-rt-${count.index}" })
+  tags = merge(local.default_tags, { Name = "${var.vpc_name}-data-rt-${count.index}" })
 }
 
 resource "aws_route_table_association" "data" {
@@ -181,5 +184,5 @@ resource "aws_security_group" "default" {
     description = "Allow all outbound traffic"
   }
 
-  tags = merge(var.tags, { Name = "${var.vpc_name}-default-sg" })
+  tags = merge(local.default_tags, { Name = "${var.vpc_name}-default-sg" })
 }

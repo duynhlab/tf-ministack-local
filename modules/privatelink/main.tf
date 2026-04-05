@@ -28,6 +28,9 @@ data "aws_region" "consumer" {
 locals {
   provider_azs = ["${data.aws_region.provider.name}a", "${data.aws_region.provider.name}b"]
   consumer_azs = ["${data.aws_region.consumer.name}a", "${data.aws_region.consumer.name}b"]
+
+  module_label = basename(abspath(path.module))
+  default_tags = merge(var.tags, { TerraformModule = local.module_label })
 }
 
 ###############################################################################
@@ -40,7 +43,7 @@ resource "aws_vpc" "provider" {
   enable_dns_support   = true
   enable_dns_hostnames = true
 
-  tags = merge(var.tags, { Name = "privatelink-provider" })
+  tags = merge(local.default_tags, { Name = "privatelink-provider" })
 }
 
 # ─── Provider Internet Gateway ───────────────────────────────────────────────
@@ -49,7 +52,7 @@ resource "aws_internet_gateway" "provider" {
   provider = aws.provider_region
   vpc_id   = aws_vpc.provider.id
 
-  tags = merge(var.tags, { Name = "pl-provider-igw" })
+  tags = merge(local.default_tags, { Name = "pl-provider-igw" })
 }
 
 # ─── Provider Public Subnets ─────────────────────────────────────────────────
@@ -63,7 +66,7 @@ resource "aws_subnet" "provider_public" {
   #trivy:ignore:AVD-AWS-0164 - Lab public tier subnets
   map_public_ip_on_launch = true
 
-  tags = merge(var.tags, {
+  tags = merge(local.default_tags, {
     Name = "pl-provider-public-${count.index}"
     Tier = "Public"
   })
@@ -73,7 +76,7 @@ resource "aws_route_table" "provider_public" {
   provider = aws.provider_region
   vpc_id   = aws_vpc.provider.id
 
-  tags = merge(var.tags, { Name = "pl-provider-public-rt" })
+  tags = merge(local.default_tags, { Name = "pl-provider-public-rt" })
 }
 
 resource "aws_route" "provider_public_igw" {
@@ -97,7 +100,7 @@ resource "aws_eip" "provider_nat" {
   count    = var.enable_nat_gateway ? 1 : 0
   vpc      = true
 
-  tags = merge(var.tags, { Name = "pl-provider-nat-eip" })
+  tags = merge(local.default_tags, { Name = "pl-provider-nat-eip" })
 
   depends_on = [aws_internet_gateway.provider]
 }
@@ -108,7 +111,7 @@ resource "aws_nat_gateway" "provider" {
   allocation_id = aws_eip.provider_nat[0].id
   subnet_id     = aws_subnet.provider_public[0].id
 
-  tags = merge(var.tags, { Name = "pl-provider-nat" })
+  tags = merge(local.default_tags, { Name = "pl-provider-nat" })
 
   depends_on = [aws_internet_gateway.provider]
 }
@@ -122,7 +125,7 @@ resource "aws_subnet" "provider_app" {
   cidr_block        = var.provider_app_subnets[count.index]
   availability_zone = local.provider_azs[count.index % length(local.provider_azs)]
 
-  tags = merge(var.tags, {
+  tags = merge(local.default_tags, {
     Name = "pl-provider-app-${count.index}"
     Tier = "Private-App"
   })
@@ -132,7 +135,7 @@ resource "aws_route_table" "provider_app" {
   provider = aws.provider_region
   vpc_id   = aws_vpc.provider.id
 
-  tags = merge(var.tags, { Name = "pl-provider-app-rt" })
+  tags = merge(local.default_tags, { Name = "pl-provider-app-rt" })
 }
 
 resource "aws_route" "provider_app_nat" {
@@ -159,7 +162,7 @@ resource "aws_subnet" "provider_data" {
   cidr_block        = var.provider_data_subnets[count.index]
   availability_zone = local.provider_azs[count.index % length(local.provider_azs)]
 
-  tags = merge(var.tags, {
+  tags = merge(local.default_tags, {
     Name = "pl-provider-data-${count.index}"
     Tier = "Private-Data"
   })
@@ -169,7 +172,7 @@ resource "aws_route_table" "provider_data" {
   provider = aws.provider_region
   vpc_id   = aws_vpc.provider.id
 
-  tags = merge(var.tags, { Name = "pl-provider-data-rt" })
+  tags = merge(local.default_tags, { Name = "pl-provider-data-rt" })
 }
 
 resource "aws_route" "provider_data_nat" {
@@ -221,7 +224,7 @@ resource "aws_security_group" "provider_public" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = merge(var.tags, { Name = "pl-provider-public-sg" })
+  tags = merge(local.default_tags, { Name = "pl-provider-public-sg" })
 }
 
 resource "aws_security_group" "provider_app" {
@@ -255,7 +258,7 @@ resource "aws_security_group" "provider_app" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = merge(var.tags, { Name = "pl-provider-app-sg" })
+  tags = merge(local.default_tags, { Name = "pl-provider-app-sg" })
 }
 
 resource "aws_security_group" "provider_data" {
@@ -296,7 +299,7 @@ resource "aws_security_group" "provider_data" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = merge(var.tags, { Name = "pl-provider-data-sg" })
+  tags = merge(local.default_tags, { Name = "pl-provider-data-sg" })
 }
 
 ###############################################################################
@@ -310,7 +313,7 @@ resource "aws_lb" "service" {
   load_balancer_type = "network"
   subnets            = aws_subnet.provider_app[*].id
 
-  tags = merge(var.tags, { Name = "privatelink-nlb" })
+  tags = merge(local.default_tags, { Name = "privatelink-nlb" })
 }
 
 resource "aws_lb_target_group" "service" {
@@ -321,7 +324,7 @@ resource "aws_lb_target_group" "service" {
   vpc_id      = aws_vpc.provider.id
   target_type = "ip"
 
-  tags = merge(var.tags, { Name = "privatelink-tg" })
+  tags = merge(local.default_tags, { Name = "privatelink-tg" })
 }
 
 resource "aws_lb_listener" "service" {
@@ -345,7 +348,7 @@ resource "aws_vpc_endpoint_service" "this" {
   acceptance_required        = false
   network_load_balancer_arns = [aws_lb.service.arn]
 
-  tags = merge(var.tags, { Name = "privatelink-endpoint-service" })
+  tags = merge(local.default_tags, { Name = "privatelink-endpoint-service" })
 }
 
 ###############################################################################
@@ -358,7 +361,7 @@ resource "aws_vpc" "consumer" {
   enable_dns_support   = true
   enable_dns_hostnames = true
 
-  tags = merge(var.tags, { Name = "privatelink-consumer" })
+  tags = merge(local.default_tags, { Name = "privatelink-consumer" })
 }
 
 # ─── Consumer Internet Gateway ───────────────────────────────────────────────
@@ -367,7 +370,7 @@ resource "aws_internet_gateway" "consumer" {
   provider = aws.consumer_region
   vpc_id   = aws_vpc.consumer.id
 
-  tags = merge(var.tags, { Name = "pl-consumer-igw" })
+  tags = merge(local.default_tags, { Name = "pl-consumer-igw" })
 }
 
 # ─── Consumer Public Subnets ─────────────────────────────────────────────────
@@ -381,7 +384,7 @@ resource "aws_subnet" "consumer_public" {
   #trivy:ignore:AVD-AWS-0164 - Lab public tier subnets
   map_public_ip_on_launch = true
 
-  tags = merge(var.tags, {
+  tags = merge(local.default_tags, {
     Name = "pl-consumer-public-${count.index}"
     Tier = "Public"
   })
@@ -391,7 +394,7 @@ resource "aws_route_table" "consumer_public" {
   provider = aws.consumer_region
   vpc_id   = aws_vpc.consumer.id
 
-  tags = merge(var.tags, { Name = "pl-consumer-public-rt" })
+  tags = merge(local.default_tags, { Name = "pl-consumer-public-rt" })
 }
 
 resource "aws_route" "consumer_public_igw" {
@@ -415,7 +418,7 @@ resource "aws_eip" "consumer_nat" {
   count    = var.enable_nat_gateway ? 1 : 0
   vpc      = true
 
-  tags = merge(var.tags, { Name = "pl-consumer-nat-eip" })
+  tags = merge(local.default_tags, { Name = "pl-consumer-nat-eip" })
 
   depends_on = [aws_internet_gateway.consumer]
 }
@@ -426,7 +429,7 @@ resource "aws_nat_gateway" "consumer" {
   allocation_id = aws_eip.consumer_nat[0].id
   subnet_id     = aws_subnet.consumer_public[0].id
 
-  tags = merge(var.tags, { Name = "pl-consumer-nat" })
+  tags = merge(local.default_tags, { Name = "pl-consumer-nat" })
 
   depends_on = [aws_internet_gateway.consumer]
 }
@@ -440,7 +443,7 @@ resource "aws_subnet" "consumer_app" {
   cidr_block        = var.consumer_app_subnets[count.index]
   availability_zone = local.consumer_azs[count.index % length(local.consumer_azs)]
 
-  tags = merge(var.tags, {
+  tags = merge(local.default_tags, {
     Name = "pl-consumer-app-${count.index}"
     Tier = "Private-App"
   })
@@ -450,7 +453,7 @@ resource "aws_route_table" "consumer_app" {
   provider = aws.consumer_region
   vpc_id   = aws_vpc.consumer.id
 
-  tags = merge(var.tags, { Name = "pl-consumer-app-rt" })
+  tags = merge(local.default_tags, { Name = "pl-consumer-app-rt" })
 }
 
 resource "aws_route" "consumer_app_nat" {
@@ -477,7 +480,7 @@ resource "aws_subnet" "consumer_data" {
   cidr_block        = var.consumer_data_subnets[count.index]
   availability_zone = local.consumer_azs[count.index % length(local.consumer_azs)]
 
-  tags = merge(var.tags, {
+  tags = merge(local.default_tags, {
     Name = "pl-consumer-data-${count.index}"
     Tier = "Private-Data"
   })
@@ -487,7 +490,7 @@ resource "aws_route_table" "consumer_data" {
   provider = aws.consumer_region
   vpc_id   = aws_vpc.consumer.id
 
-  tags = merge(var.tags, { Name = "pl-consumer-data-rt" })
+  tags = merge(local.default_tags, { Name = "pl-consumer-data-rt" })
 }
 
 resource "aws_route" "consumer_data_nat" {
@@ -539,7 +542,7 @@ resource "aws_security_group" "consumer_public" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = merge(var.tags, { Name = "pl-consumer-public-sg" })
+  tags = merge(local.default_tags, { Name = "pl-consumer-public-sg" })
 }
 
 resource "aws_security_group" "consumer_app" {
@@ -564,7 +567,7 @@ resource "aws_security_group" "consumer_app" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = merge(var.tags, { Name = "pl-consumer-app-sg" })
+  tags = merge(local.default_tags, { Name = "pl-consumer-app-sg" })
 }
 
 resource "aws_security_group" "consumer_data" {
@@ -605,7 +608,7 @@ resource "aws_security_group" "consumer_data" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = merge(var.tags, { Name = "pl-consumer-data-sg" })
+  tags = merge(local.default_tags, { Name = "pl-consumer-data-sg" })
 }
 
 # ─── VPC Endpoint Security Group ─────────────────────────────────────────────
@@ -631,7 +634,7 @@ resource "aws_security_group" "endpoint" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = merge(var.tags, { Name = "privatelink-endpoint-sg" })
+  tags = merge(local.default_tags, { Name = "privatelink-endpoint-sg" })
 }
 
 ###############################################################################
@@ -647,5 +650,5 @@ resource "aws_vpc_endpoint" "this" {
   security_group_ids  = [aws_security_group.endpoint.id]
   private_dns_enabled = false
 
-  tags = merge(var.tags, { Name = "privatelink-consumer-endpoint" })
+  tags = merge(local.default_tags, { Name = "privatelink-consumer-endpoint" })
 }

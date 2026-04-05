@@ -33,6 +33,9 @@ locals {
   all_spoke_cidrs_a = [for k, v in var.spoke_vpcs : v.cidr]
   all_spoke_cidrs_b = [for k, v in var.spoke_vpcs_region_b : v.cidr]
   all_spoke_cidrs   = concat(local.all_spoke_cidrs_a, local.all_spoke_cidrs_b)
+
+  module_label = basename(abspath(path.module))
+  default_tags = merge(var.tags, { TerraformModule = local.module_label })
 }
 
 ###############################################################################
@@ -46,7 +49,7 @@ resource "aws_ec2_transit_gateway" "region_a" {
   default_route_table_propagation = "enable"
   dns_support                     = "enable"
 
-  tags = merge(var.tags, { Name = "tgw-region-a" })
+  tags = merge(local.default_tags, { Name = "tgw-region-a" })
 }
 
 ###############################################################################
@@ -60,7 +63,7 @@ resource "aws_vpc" "spoke_a" {
   enable_dns_support   = true
   enable_dns_hostnames = true
 
-  tags = merge(var.tags, { Name = each.key })
+  tags = merge(local.default_tags, { Name = each.key })
 }
 
 # ─── Internet Gateways – Region A ────────────────────────────────────────────
@@ -70,7 +73,7 @@ resource "aws_internet_gateway" "spoke_a" {
   for_each = var.spoke_vpcs
   vpc_id   = aws_vpc.spoke_a[each.key].id
 
-  tags = merge(var.tags, { Name = "${each.key}-igw" })
+  tags = merge(local.default_tags, { Name = "${each.key}-igw" })
 }
 
 # ─── Public Subnets – Region A ───────────────────────────────────────────────
@@ -96,7 +99,7 @@ resource "aws_subnet" "spoke_a_public" {
   #trivy:ignore:AVD-AWS-0164 - Lab public tier subnets
   map_public_ip_on_launch = true
 
-  tags = merge(var.tags, {
+  tags = merge(local.default_tags, {
     Name = each.key
     Tier = "Public"
   })
@@ -107,7 +110,7 @@ resource "aws_route_table" "spoke_a_public" {
   for_each = var.spoke_vpcs
   vpc_id   = aws_vpc.spoke_a[each.key].id
 
-  tags = merge(var.tags, { Name = "${each.key}-public-rt" })
+  tags = merge(local.default_tags, { Name = "${each.key}-public-rt" })
 }
 
 resource "aws_route" "spoke_a_public_igw" {
@@ -142,7 +145,7 @@ resource "aws_eip" "spoke_a_nat" {
   for_each = var.enable_nat_gateway ? var.spoke_vpcs : {}
   vpc      = true
 
-  tags = merge(var.tags, { Name = "${each.key}-nat-eip" })
+  tags = merge(local.default_tags, { Name = "${each.key}-nat-eip" })
 
   depends_on = [aws_internet_gateway.spoke_a]
 }
@@ -157,7 +160,7 @@ resource "aws_nat_gateway" "spoke_a" {
     if startswith(k, "${each.key}-public-0")
   ][0]
 
-  tags = merge(var.tags, { Name = "${each.key}-nat" })
+  tags = merge(local.default_tags, { Name = "${each.key}-nat" })
 
   depends_on = [aws_internet_gateway.spoke_a]
 }
@@ -183,7 +186,7 @@ resource "aws_subnet" "spoke_a_app" {
   cidr_block        = each.value.cidr_block
   availability_zone = each.value.az
 
-  tags = merge(var.tags, {
+  tags = merge(local.default_tags, {
     Name = each.key
     Tier = "Private-App"
   })
@@ -194,7 +197,7 @@ resource "aws_route_table" "spoke_a_app" {
   for_each = var.spoke_vpcs
   vpc_id   = aws_vpc.spoke_a[each.key].id
 
-  tags = merge(var.tags, { Name = "${each.key}-app-rt" })
+  tags = merge(local.default_tags, { Name = "${each.key}-app-rt" })
 }
 
 resource "aws_route" "spoke_a_app_nat" {
@@ -243,7 +246,7 @@ resource "aws_subnet" "spoke_a_data" {
   cidr_block        = each.value.cidr_block
   availability_zone = each.value.az
 
-  tags = merge(var.tags, {
+  tags = merge(local.default_tags, {
     Name = each.key
     Tier = "Private-Data"
   })
@@ -254,7 +257,7 @@ resource "aws_route_table" "spoke_a_data" {
   for_each = var.spoke_vpcs
   vpc_id   = aws_vpc.spoke_a[each.key].id
 
-  tags = merge(var.tags, { Name = "${each.key}-data-rt" })
+  tags = merge(local.default_tags, { Name = "${each.key}-data-rt" })
 }
 
 resource "aws_route" "spoke_a_data_nat" {
@@ -317,7 +320,7 @@ resource "aws_security_group" "spoke_a_public" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = merge(var.tags, { Name = "${each.key}-public-sg" })
+  tags = merge(local.default_tags, { Name = "${each.key}-public-sg" })
 }
 
 resource "aws_security_group" "spoke_a_app" {
@@ -351,7 +354,7 @@ resource "aws_security_group" "spoke_a_app" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = merge(var.tags, { Name = "${each.key}-app-sg" })
+  tags = merge(local.default_tags, { Name = "${each.key}-app-sg" })
 }
 
 resource "aws_security_group" "spoke_a_data" {
@@ -393,7 +396,7 @@ resource "aws_security_group" "spoke_a_data" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = merge(var.tags, { Name = "${each.key}-data-sg" })
+  tags = merge(local.default_tags, { Name = "${each.key}-data-sg" })
 }
 
 # ─── TGW VPC Attachments – Region A (use app subnets) ────────────────────────
@@ -408,7 +411,7 @@ resource "aws_ec2_transit_gateway_vpc_attachment" "spoke_a" {
     if startswith(k, "${each.key}-app-")
   ]
 
-  tags = merge(var.tags, { Name = "${each.key}-tgw-attachment" })
+  tags = merge(local.default_tags, { Name = "${each.key}-tgw-attachment" })
 }
 
 # ─── Routes to TGW – Region A (all tiers) ────────────────────────────────────
@@ -490,7 +493,7 @@ resource "aws_ec2_transit_gateway" "region_b" {
   default_route_table_propagation = "enable"
   dns_support                     = "enable"
 
-  tags = merge(var.tags, { Name = "tgw-region-b" })
+  tags = merge(local.default_tags, { Name = "tgw-region-b" })
 }
 
 ###############################################################################
@@ -504,7 +507,7 @@ resource "aws_vpc" "spoke_b" {
   enable_dns_support   = true
   enable_dns_hostnames = true
 
-  tags = merge(var.tags, { Name = each.key })
+  tags = merge(local.default_tags, { Name = each.key })
 }
 
 # ─── Internet Gateways – Region B ────────────────────────────────────────────
@@ -514,7 +517,7 @@ resource "aws_internet_gateway" "spoke_b" {
   for_each = var.spoke_vpcs_region_b
   vpc_id   = aws_vpc.spoke_b[each.key].id
 
-  tags = merge(var.tags, { Name = "${each.key}-igw" })
+  tags = merge(local.default_tags, { Name = "${each.key}-igw" })
 }
 
 # ─── Public Subnets – Region B ───────────────────────────────────────────────
@@ -540,7 +543,7 @@ resource "aws_subnet" "spoke_b_public" {
   #trivy:ignore:AVD-AWS-0164 - Lab public tier subnets
   map_public_ip_on_launch = true
 
-  tags = merge(var.tags, {
+  tags = merge(local.default_tags, {
     Name = each.key
     Tier = "Public"
   })
@@ -551,7 +554,7 @@ resource "aws_route_table" "spoke_b_public" {
   for_each = var.spoke_vpcs_region_b
   vpc_id   = aws_vpc.spoke_b[each.key].id
 
-  tags = merge(var.tags, { Name = "${each.key}-public-rt" })
+  tags = merge(local.default_tags, { Name = "${each.key}-public-rt" })
 }
 
 resource "aws_route" "spoke_b_public_igw" {
@@ -586,7 +589,7 @@ resource "aws_eip" "spoke_b_nat" {
   for_each = var.enable_nat_gateway ? var.spoke_vpcs_region_b : {}
   vpc      = true
 
-  tags = merge(var.tags, { Name = "${each.key}-nat-eip" })
+  tags = merge(local.default_tags, { Name = "${each.key}-nat-eip" })
 
   depends_on = [aws_internet_gateway.spoke_b]
 }
@@ -601,7 +604,7 @@ resource "aws_nat_gateway" "spoke_b" {
     if startswith(k, "${each.key}-public-0")
   ][0]
 
-  tags = merge(var.tags, { Name = "${each.key}-nat" })
+  tags = merge(local.default_tags, { Name = "${each.key}-nat" })
 
   depends_on = [aws_internet_gateway.spoke_b]
 }
@@ -627,7 +630,7 @@ resource "aws_subnet" "spoke_b_app" {
   cidr_block        = each.value.cidr_block
   availability_zone = each.value.az
 
-  tags = merge(var.tags, {
+  tags = merge(local.default_tags, {
     Name = each.key
     Tier = "Private-App"
   })
@@ -638,7 +641,7 @@ resource "aws_route_table" "spoke_b_app" {
   for_each = var.spoke_vpcs_region_b
   vpc_id   = aws_vpc.spoke_b[each.key].id
 
-  tags = merge(var.tags, { Name = "${each.key}-app-rt" })
+  tags = merge(local.default_tags, { Name = "${each.key}-app-rt" })
 }
 
 resource "aws_route" "spoke_b_app_nat" {
@@ -687,7 +690,7 @@ resource "aws_subnet" "spoke_b_data" {
   cidr_block        = each.value.cidr_block
   availability_zone = each.value.az
 
-  tags = merge(var.tags, {
+  tags = merge(local.default_tags, {
     Name = each.key
     Tier = "Private-Data"
   })
@@ -698,7 +701,7 @@ resource "aws_route_table" "spoke_b_data" {
   for_each = var.spoke_vpcs_region_b
   vpc_id   = aws_vpc.spoke_b[each.key].id
 
-  tags = merge(var.tags, { Name = "${each.key}-data-rt" })
+  tags = merge(local.default_tags, { Name = "${each.key}-data-rt" })
 }
 
 resource "aws_route" "spoke_b_data_nat" {
@@ -761,7 +764,7 @@ resource "aws_security_group" "spoke_b_public" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = merge(var.tags, { Name = "${each.key}-public-sg" })
+  tags = merge(local.default_tags, { Name = "${each.key}-public-sg" })
 }
 
 resource "aws_security_group" "spoke_b_app" {
@@ -795,7 +798,7 @@ resource "aws_security_group" "spoke_b_app" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = merge(var.tags, { Name = "${each.key}-app-sg" })
+  tags = merge(local.default_tags, { Name = "${each.key}-app-sg" })
 }
 
 resource "aws_security_group" "spoke_b_data" {
@@ -837,7 +840,7 @@ resource "aws_security_group" "spoke_b_data" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = merge(var.tags, { Name = "${each.key}-data-sg" })
+  tags = merge(local.default_tags, { Name = "${each.key}-data-sg" })
 }
 
 # ─── TGW VPC Attachments – Region B (use app subnets) ────────────────────────
@@ -852,7 +855,7 @@ resource "aws_ec2_transit_gateway_vpc_attachment" "spoke_b" {
     if startswith(k, "${each.key}-app-")
   ]
 
-  tags = merge(var.tags, { Name = "${each.key}-tgw-attachment" })
+  tags = merge(local.default_tags, { Name = "${each.key}-tgw-attachment" })
 }
 
 # ─── Routes to TGW – Region B (all tiers) ────────────────────────────────────
@@ -934,7 +937,7 @@ resource "aws_ec2_transit_gateway_peering_attachment" "cross_region" {
   peer_transit_gateway_id = aws_ec2_transit_gateway.region_b.id
   peer_region             = data.aws_region.b.name
 
-  tags = merge(var.tags, { Name = "tgw-peering-a-to-b" })
+  tags = merge(local.default_tags, { Name = "tgw-peering-a-to-b" })
 }
 
 resource "aws_ec2_transit_gateway_peering_attachment_accepter" "cross_region" {
@@ -942,5 +945,5 @@ resource "aws_ec2_transit_gateway_peering_attachment_accepter" "cross_region" {
   provider                      = aws.region_b
   transit_gateway_attachment_id = aws_ec2_transit_gateway_peering_attachment.cross_region[0].id
 
-  tags = merge(var.tags, { Name = "tgw-peering-b-accept" })
+  tags = merge(local.default_tags, { Name = "tgw-peering-b-accept" })
 }

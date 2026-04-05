@@ -199,11 +199,13 @@ jobs:
             echo "skip=false" >> $GITHUB_OUTPUT
           fi
 
+      # Map both host ports: 4566 (dev providers.tf) and 4567 (prod providers.tf) -> container 4566, same pattern as ./scripts/setup.sh + compose.
       - name: Start LocalStack Pro
         if: steps.check-token.outputs.skip != 'true'
         run: |
           docker run -d --name localstack-pro \
             -p 4566:4566 \
+            -p 4567:4566 \
             -p 4510-4559:4510-4559 \
             -e LOCALSTACK_AUTH_TOKEN=$LOCALSTACK_AUTH_TOKEN \
             -e SERVICES=ec2,sts,elbv2,wafv2 \
@@ -216,7 +218,7 @@ jobs:
             echo "  Attempt $i/30..."
             sleep 3
           done
-          echo "LocalStack Pro health check:"
+          echo "LocalStack Pro health check (4566 and 4567 both reach the same gateway):"
           curl -s http://localhost:4566/_localstack/health | python3 -m json.tool || true
 
       - name: Test Dev Environment (LocalStack Pro)

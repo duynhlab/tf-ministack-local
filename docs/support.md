@@ -1,6 +1,6 @@
 # MiniStack vs LocalStack — Service Comparison
 
-> MiniStack: **v1.1.25**
+> MiniStack: **v1.1.36**
 > LocalStack Pro: **latest**
 
 ---
@@ -189,7 +189,7 @@
 |---|---|---|---|---|
 | CreateSecurityGroup | ✅ | ✅ | v1.0.0+ | Default SG luôn có sẵn; non-default SGs include allow-all egress rule (fixed in v1.1.18) |
 | DeleteSecurityGroup | ✅ | ✅ | v1.0.0+ | |
-| DescribeSecurityGroups | ✅ | ✅ | v1.0.0+ | |
+| DescribeSecurityGroups | ✅ | ✅ | v1.0.0+ | vpc-id/group-name filters supported (v1.1.35) |
 | AuthorizeSecurityGroupIngress | ✅ | ✅ | v1.0.0+ | Rules stored, không enforced trên cả 2; deduplication fixed in v1.1.18 |
 | RevokeSecurityGroupIngress | ✅ | ✅ | v1.0.0+ | |
 | AuthorizeSecurityGroupEgress | ✅ | ✅ | v1.0.0+ | Rules stored, không enforced trên cả 2; deduplication fixed in v1.1.18 |
@@ -201,11 +201,11 @@
 
 | Operation | MiniStack | LocalStack Pro | MiniStack Version | Notes |
 |---|---|---|---|---|
-| CreateVpc | ✅ | ✅ | v1.0.0+ | Default VPC luôn có sẵn |
+| CreateVpc | ✅ | ✅ | v1.0.0+ | Default VPC luôn có sẵn; per-VPC default resources (route table, NACL, SG) created in v1.1.35 |
 | DeleteVpc | ✅ | ✅ | v1.0.0+ | |
 | DescribeVpcs | ✅ | ✅ | v1.0.0+ | |
 | ModifyVpcAttribute | ✅ | ✅ | v1.0.0+ | Lưu EnableDnsSupport / EnableDnsHostnames vào state |
-| **DescribeVpcAttribute** | ❌ | ✅ | — | **Missing** — `InvalidAction` khi Terraform refresh `aws_vpc` |
+| **DescribeVpcAttribute** | ✅ | ✅ | v1.1.32+ | **FIXED** — Now returns EnableDnsSupport, EnableDnsHostnames, EnableNetworkAddressUsageMetrics |
 | CreateSubnet | ✅ | ✅ | v1.0.0+ | Default subnet luôn có sẵn |
 | DeleteSubnet | ✅ | ✅ | v1.0.0+ | |
 | DescribeSubnets | ✅ | ✅ | v1.0.0+ | |
@@ -213,6 +213,7 @@
 | CreateVpcEndpoint | ✅ | ✅ | v1.0.0+ | |
 | DeleteVpcEndpoints | ✅ | ✅ | v1.0.0+ | |
 | DescribeVpcEndpoints | ✅ | ✅ | v1.0.0+ | |
+| ModifyVpcEndpoint | ✅ | ✅ | v1.1.36+ | Add/remove route tables, subnets, and policy on existing VPC endpoints |
 | CreateVpcPeeringConnection | ✅ | ✅ | v1.0.0+ | |
 | AcceptVpcPeeringConnection | ✅ | ✅ | v1.0.0+ | |
 | DescribeVpcPeeringConnections | ✅ | ✅ | v1.0.0+ | Region field in requesterVpcInfo/accepterVpcInfo fixed in v1.1.18 |
@@ -231,9 +232,10 @@
 | DetachInternetGateway | ✅ | ✅ | v1.0.0+ | |
 | CreateRouteTable | ✅ | ✅ | v1.0.0+ | Default route table luôn có sẵn |
 | DeleteRouteTable | ✅ | ✅ | v1.0.0+ | |
-| DescribeRouteTables | ✅ | ✅ | v1.0.0+ | |
+| DescribeRouteTables | ✅ | ✅ | v1.0.0+ | association.main, association.route-table-association-id, association.subnet-id, vpc-id filters supported (v1.1.34+) |
 | AssociateRouteTable | ✅ | ✅ | v1.0.0+ | |
 | DisassociateRouteTable | ✅ | ✅ | v1.0.0+ | |
+| ReplaceRouteTableAssociation | ✅ | ✅ | v1.1.36+ | Moves subnet association from one route table to another |
 | CreateRoute | ✅ | ✅ | v1.0.0+ | |
 | ReplaceRoute | ✅ | ✅ | v1.0.0+ | |
 | DeleteRoute | ✅ | ✅ | v1.0.0+ | |
@@ -287,7 +289,7 @@
 | Operation | MiniStack | LocalStack Pro | MiniStack Version | Notes |
 |---|---|---|---|---|
 | CreateNetworkAcl | ✅ | ✅ | v1.0.0+ | |
-| DescribeNetworkAcls | ✅ | ✅ | v1.0.0+ | |
+| DescribeNetworkAcls | ✅ | ✅ | v1.0.0+ | vpc-id + default=true filter supported (v1.1.35) |
 | DeleteNetworkAcl | ✅ | ✅ | v1.0.0+ | |
 | CreateNetworkAclEntry | ✅ | ✅ | v1.0.0+ | |
 | DeleteNetworkAclEntry | ✅ | ✅ | v1.0.0+ | |
@@ -330,6 +332,204 @@
 
 ---
 
+## Lambda
+
+| Operation | MiniStack | LocalStack Pro | MiniStack Version | Notes |
+|---|---|---|---|---|
+| CreateFunction | ✅ | ✅ | v1.1.18+ | Supports ZipFile, S3Bucket/S3Key code sources |
+| UpdateFunctionCode | ✅ | ✅ | v1.1.18+ | Supports ZipFile, S3Bucket/S3Key code sources |
+| UpdateFunctionConfiguration | ✅ | ✅ | v1.1.18+ | |
+| GetFunction | ✅ | ✅ | v1.1.18+ | |
+| ListFunctions | ✅ | ✅ | v1.1.18+ | |
+| DeleteFunction | ✅ | ✅ | v1.1.18+ | |
+| Invoke | ✅ | ✅ | v1.1.18+ | |
+| PublishVersion | ✅ | ✅ | v1.1.18+ | Creates immutable numbered versions |
+| ListVersionsByFunction | ✅ | ✅ | v1.1.18+ | |
+| CreateFunctionUrlConfig | ✅ | ✅ | v1.1.18+ | |
+| GetFunctionUrlConfig | ✅ | ✅ | v1.1.18+ | |
+| DeleteFunctionUrlConfig | ✅ | ✅ | v1.1.18+ | |
+| CreateEventSourceMapping | ✅ | ✅ | v1.1.18+ | Supports SQS and Kinesis streams |
+| GetEventSourceMapping | ✅ | ✅ | v1.1.18+ | |
+| ListEventSourceMappings | ✅ | ✅ | v1.1.18+ | |
+| UpdateEventSourceMapping | ✅ | ✅ | v1.1.18+ | |
+| DeleteEventSourceMapping | ✅ | ✅ | v1.1.18+ | |
+| Node.js runtime support | ✅ | ✅ | v1.1.18+ | Warm worker pool with async/await, Promise, callback handlers |
+| Python runtime support | ✅ | ✅ | v1.0.0+ | Warm worker pool |
+| Provided runtime support | ✅ | ✅ | v1.1.36+ | provided.al2023, provided.al2 runtimes via Docker with AWS Lambda RIE |
+
+---
+
+## EC2 — Prefix Lists & Managed Prefix Lists
+
+| Operation | MiniStack | LocalStack Pro | MiniStack Version | Notes |
+|---|---|---|---|---|
+| DescribePrefixLists | ✅ | ✅ | v1.1.36+ | Returns AWS service prefix lists (S3, DynamoDB) and user-managed |
+| CreateManagedPrefixList | ✅ | ✅ | v1.1.36+ | |
+| DescribeManagedPrefixLists | ✅ | ✅ | v1.1.36+ | |
+| GetManagedPrefixListEntries | ✅ | ✅ | v1.1.36+ | |
+| ModifyManagedPrefixList | ✅ | ✅ | v1.1.36+ | |
+| DeleteManagedPrefixList | ✅ | ✅ | v1.1.36+ | |
+
+---
+
+## EC2 — VPN Gateways & Customer Gateways
+
+| Operation | MiniStack | LocalStack Pro | MiniStack Version | Notes |
+|---|---|---|---|---|
+| CreateVpnGateway | ✅ | ✅ | v1.1.36+ | |
+| DescribeVpnGateways | ✅ | ✅ | v1.1.36+ | Includes attachment state tracking |
+| AttachVpnGateway | ✅ | ✅ | v1.1.36+ | |
+| DetachVpnGateway | ✅ | ✅ | v1.1.36+ | |
+| DeleteVpnGateway | ✅ | ✅ | v1.1.36+ | |
+| EnableVgwRoutePropagation | ✅ | ✅ | v1.1.36+ | |
+| DisableVgwRoutePropagation | ✅ | ✅ | v1.1.36+ | |
+| CreateCustomerGateway | ✅ | ✅ | v1.1.36+ | |
+| DescribeCustomerGateways | ✅ | ✅ | v1.1.36+ | |
+| DeleteCustomerGateway | ✅ | ✅ | v1.1.36+ | |
+
+---
+
+## CloudFront
+
+| Operation | MiniStack | LocalStack Pro | MiniStack Version | Notes |
+|---|---|---|---|---|
+| CreateDistribution | ✅ | ✅ | v1.1.26+ | ETag-based concurrency control |
+| GetDistribution | ✅ | ✅ | v1.1.26+ | |
+| GetDistributionConfig | ✅ | ✅ | v1.1.26+ | |
+| ListDistributions | ✅ | ✅ | v1.1.26+ | |
+| UpdateDistribution | ✅ | ✅ | v1.1.26+ | |
+| DeleteDistribution | ✅ | ✅ | v1.1.26+ | |
+| CreateInvalidation | ✅ | ✅ | v1.1.26+ | |
+| ListInvalidations | ✅ | ✅ | v1.1.26+ | |
+| GetInvalidation | ✅ | ✅ | v1.1.26+ | |
+
+---
+
+## ECR
+
+| Operation | MiniStack | LocalStack Pro | MiniStack Version | Notes |
+|---|---|---|---|---|
+| CreateRepository | ✅ | ✅ | v1.1.26+ | |
+| DescribeRepositories | ✅ | ✅ | v1.1.26+ | |
+| DeleteRepository | ✅ | ✅ | v1.1.26+ | |
+| PutImage | ✅ | ✅ | v1.1.26+ | |
+| BatchGetImage | ✅ | ✅ | v1.1.26+ | |
+| BatchDeleteImage | ✅ | ✅ | v1.1.26+ | |
+| ListImages | ✅ | ✅ | v1.1.26+ | |
+| DescribeImages | ✅ | ✅ | v1.1.26+ | |
+| GetAuthorizationToken | ✅ | ✅ | v1.1.26+ | |
+| Lifecycle policies | ✅ | ✅ | v1.1.26+ | |
+| Repository policies | ✅ | ✅ | v1.1.26+ | |
+| Tags | ✅ | ✅ | v1.1.26+ | |
+| Layer upload flow | ✅ | ✅ | v1.1.26+ | |
+
+---
+
+## AppSync
+
+| Operation | MiniStack | LocalStack Pro | MiniStack Version | Notes |
+|---|---|---|---|---|
+| CreateGraphQLApi | ✅ | ✅ | v1.1.32+ | REST/JSON API under /v1/apis |
+| GetGraphQLApi | ✅ | ✅ | v1.1.32+ | |
+| ListGraphQLApis | ✅ | ✅ | v1.1.32+ | |
+| UpdateGraphQLApi | ✅ | ✅ | v1.1.32+ | |
+| DeleteGraphQLApi | ✅ | ✅ | v1.1.32+ | |
+| CreateApiKey | ✅ | ✅ | v1.1.32+ | |
+| ListApiKeys | ✅ | ✅ | v1.1.32+ | |
+| DeleteApiKey | ✅ | ✅ | v1.1.32+ | |
+| CreateDataSource | ✅ | ✅ | v1.1.32+ | |
+| GetDataSource | ✅ | ✅ | v1.1.32+ | |
+| ListDataSources | ✅ | ✅ | v1.1.32+ | |
+| DeleteDataSource | ✅ | ✅ | v1.1.32+ | |
+| CreateResolver | ✅ | ✅ | v1.1.32+ | |
+| GetResolver | ✅ | ✅ | v1.1.32+ | |
+| ListResolvers | ✅ | ✅ | v1.1.32+ | |
+| DeleteResolver | ✅ | ✅ | v1.1.32+ | |
+| CreateType | ✅ | ✅ | v1.1.32+ | |
+| ListTypes | ✅ | ✅ | v1.1.32+ | |
+| GetType | ✅ | ✅ | v1.1.32+ | |
+| TagResource | ✅ | ✅ | v1.1.32+ | |
+| UntagResource | ✅ | ✅ | v1.1.32+ | |
+| ListTagsForResource | ✅ | ✅ | v1.1.32+ | |
+| GraphQL data plane | ✅ | ✅ | v1.1.33+ | POST /v1/apis/{apiId}/graphql executes queries and mutations |
+
+---
+
+## Cognito
+
+| Operation | MiniStack | LocalStack Pro | MiniStack Version | Notes |
+|---|---|---|---|---|
+| CreateUserPool | ✅ | ✅ | v1.1.32+ | |
+| GetUserPool | ✅ | ✅ | v1.1.32+ | |
+| ListUserPools | ✅ | ✅ | v1.1.32+ | |
+| UpdateUserPool | ✅ | ✅ | v1.1.32+ | |
+| DeleteUserPool | ✅ | ✅ | v1.1.32+ | |
+| CreateUserPoolClient | ✅ | ✅ | v1.1.32+ | |
+| GetUserPoolClient | ✅ | ✅ | v1.1.32+ | |
+| ListUserPoolClients | ✅ | ✅ | v1.1.32+ | |
+| UpdateUserPoolClient | ✅ | ✅ | v1.1.32+ | |
+| DeleteUserPoolClient | ✅ | ✅ | v1.1.32+ | |
+| CreateIdentityPool | ✅ | ✅ | v1.1.32+ | |
+| GetIdentityPool | ✅ | ✅ | v1.1.32+ | |
+| ListIdentityPools | ✅ | ✅ | v1.1.32+ | |
+| UpdateIdentityPool | ✅ | ✅ | v1.1.32+ | |
+| DeleteIdentityPool | ✅ | ✅ | v1.1.32+ | |
+| CreateUserPoolDomain | ✅ | ✅ | v1.1.32+ | |
+| GetUserPoolDomain | ✅ | ✅ | v1.1.32+ | |
+| DeleteUserPoolDomain | ✅ | ✅ | v1.1.32+ | |
+| JWKS/OIDC endpoints | ✅ | ✅ | v1.1.32+ | /.well-known/jwks.json, /.well-known/openid-configuration |
+
+---
+
+## KMS
+
+| Operation | MiniStack | LocalStack Pro | MiniStack Version | Notes |
+|---|---|---|---|---|
+| CreateKey | ✅ | ✅ | v1.1.26+ | |
+| DescribeKey | ✅ | ✅ | v1.1.26+ | |
+| ListKeys | ✅ | ✅ | v1.1.26+ | |
+| ScheduleKeyDeletion | ✅ | ✅ | v1.1.36+ | |
+| CancelKeyDeletion | ✅ | ✅ | v1.1.36+ | |
+| EnableKey | ✅ | ✅ | v1.1.36+ | |
+| DisableKey | ✅ | ✅ | v1.1.36+ | |
+| EnableKeyRotation | ✅ | ✅ | v1.1.36+ | |
+| DisableKeyRotation | ✅ | ✅ | v1.1.36+ | |
+| GetKeyRotationStatus | ✅ | ✅ | v1.1.36+ | |
+| GetKeyPolicy | ✅ | ✅ | v1.1.36+ | |
+| PutKeyPolicy | ✅ | ✅ | v1.1.36+ | |
+| ListKeyPolicies | ✅ | ✅ | v1.1.36+ | |
+| TagResource | ✅ | ✅ | v1.1.36+ | |
+| UntagResource | ✅ | ✅ | v1.1.36+ | |
+| ListResourceTags | ✅ | ✅ | v1.1.36+ | |
+| Encrypt | ✅ | ✅ | v1.1.26+ | |
+| Decrypt | ✅ | ✅ | v1.1.26+ | |
+| GenerateDataKey | ✅ | ✅ | v1.1.26+ | |
+| GenerateDataKeyWithoutPlaintext | ✅ | ✅ | v1.1.26+ | |
+| Sign | ✅ | ✅ | v1.1.36+ | RSA Sign/Verify with cryptography package |
+| Verify | ✅ | ✅ | v1.1.36+ | |
+| GetPublicKey | ✅ | ✅ | v1.1.36+ | |
+
+---
+
+## Route53
+
+| Operation | MiniStack | LocalStack Pro | MiniStack Version | Notes |
+|---|---|---|---|---|
+| CreateHostedZone | ✅ | ✅ | v1.1.26+ | |
+| GetHostedZone | ✅ | ✅ | v1.1.26+ | |
+| ListHostedZones | ✅ | ✅ | v1.1.26+ | |
+| DeleteHostedZone | ✅ | ✅ | v1.1.26+ | |
+| ChangeResourceRecordSets | ✅ | ✅ | v1.1.26+ | |
+| ListResourceRecordSets | ✅ | ✅ | v1.1.26+ | Fixed ordering and pagination in v1.1.25 |
+| GetChange | ✅ | ✅ | v1.1.26+ | |
+| GetHealthCheck | ✅ | ✅ | v1.1.26+ | |
+| ListHealthChecks | ✅ | ✅ | v1.1.26+ | |
+| CreateHealthCheck | ✅ | ✅ | v1.1.26+ | |
+| DeleteHealthCheck | ✅ | ✅ | v1.1.26+ | |
+| UpdateHealthCheck | ✅ | ✅ | v1.1.26+ | |
+
+---
+
 ## Known Missing APIs — cần patch thủ công
 
 | API | Service | MiniStack | LocalStack Pro | Trigger | Workaround |
@@ -337,7 +537,7 @@
 | `DescribeVpcAttribute` | EC2 | ❌ | ✅ | Terraform refresh `aws_vpc` (provider ≥ 5.x) | Patch `ec2.py` hoặc pin provider `~> 4.67` |
 | `DescribeAddressesAttribute` | EC2 | ❌ | ✅ | Terraform refresh `aws_eip` (provider ≥ 5.x) | Patch `ec2.py` hoặc tránh dùng `aws_eip` |
 
-*Note: Checked MiniStack releases up to v1.1.25 — these APIs are still not supported*
+*Note: Checked MiniStack releases up to v1.1.36 — DescribeVpcAttribute now supported (v1.1.32), DescribeAddressesAttribute still missing*
 
 ---
 
@@ -350,8 +550,9 @@
 | LocalStack Pro | `localstack/localstack-pro:latest` | `:4567` | `environments/prod` |
 
 ### State Persistence (v1.1.25+)
-MiniStack now supports state persistence for 10 services when `PERSIST_STATE=1`:
-- SQS, SNS, SSM, SecretsManager, IAM, DynamoDB, KMS, EventBridge, CloudWatch Logs, and Kinesis
+MiniStack now supports state persistence for 20 services when `PERSIST_STATE=1`:
+- **v1.1.25**: SQS, SNS, SSM, SecretsManager, IAM, DynamoDB, KMS, EventBridge, CloudWatch Logs, Kinesis
+- **v1.1.26**: Lambda (config + code_zip), EC2, Route53, Cognito, ECR, CloudWatch Metrics, S3 metadata, RDS, ECS, ElastiCache
 - State is saved on shutdown and restored on startup via atomic JSON files
 - S3 persistence remains separate via `S3_PERSIST=1`
 

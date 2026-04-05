@@ -1,98 +1,82 @@
 # AGENTS.md
 
-Guidance for AI coding agents working in this repository.
+Guidance for AI coding agents (Claude Code, Cursor) working in this repository.
 
 ---
 
 ## Purpose
 
-Terraform networking lab for enterprise-like AWS patterns using dual emulators:
+Terraform lab for **enterprise-style AWS networking** using two emulators:
 
 | Environment | Emulator | Endpoint |
-|---|---|---|
+|-------------|----------|----------|
 | `environments/dev` | MiniStack | `http://localhost:4566` |
 | `environments/prod` | LocalStack Pro | `http://localhost:4567` |
 
-`prod` is the main "real-work" scenario and must include all core networking use-cases:
+`prod` is the main multi-pattern scenario: VPC peering, PrivateLink, Transit Gateway hub–spoke, 3-tier edge VPC (IGW → public / app / data).
 
-1. VPC Peering
-2. PrivateLink
-3. Transit Gateway hub-spoke multi-VPC
-4. 3-tier edge VPC (client -> IGW -> public/app/data)
+---
+
+## Lab scope (production-oriented focus)
+
+Use **`docs/subnet.csv`** for CIDRs. Intended learning areas:
+
+- **Identity**: IAM (roles, policies, instance profiles), STS (implicit via provider / `GetCallerIdentity` patterns).
+- **Data & edge**: S3 (bucket, separate bucket policy, versioning, encryption, public access block).
+- **Edge protection**: WAF v2 (Web ACL, IP set, association) — see `modules/waf-v2`.
+- **EC2 networking**: VPC, subnets, Internet Gateway, NAT gateway, egress-only IGW, route tables & routes, VPC endpoints (when used), VPC peering / TGW / PrivateLink (via `prod` modules).
+- **EC2 attachments**: Security Groups (explicit rules), Elastic IPs, ENIs, key pairs, instances (lab patterns; no real VMs on emulators).
+- **Core hardening (always in scope for this lab)**: **Network ACLs**, **VPC Flow Logs**, **EBS** (volumes/snapshots as used by patterns).
+
+API-level gaps vs emulators: **[docs/support.md](docs/support.md)** (authoritative matrix).
 
 ---
 
 ## Repository layout
 
 ```text
-tf-test/
-|- docs/
-|  |- report.md
-|  `- subnet.csv             # IP allocation table - consult before assigning CIDRs
-|- environments/
-|  |- dev/                   # MiniStack emulation (ap-southeast-1, :4566)
-|  |  |- providers.tf
-|  |  |- main.tf
-|  |  |- variables.tf
-|  |  |- outputs.tf
-|  |  `- terraform.tfvars
-|  `- prod/                  # LocalStack Pro emulation (multi-region, :4567)
-|     |- providers.tf
-|     |- main.tf
-|     |- variables.tf
-|     |- outputs.tf
-|     `- terraform.tfvars
-`- modules/
-   |- vpc-base/
-   |- vpc-peering/
-   |- privatelink/
-   `- transit-gateway/
+docs/
+  report.md
+  subnet.csv              # CIDR source of truth
+  support.md               # MiniStack vs LocalStack Pro API coverage
+environments/
+  dev/                     # MiniStack, ap-southeast-1, :4566
+  prod/                    # LocalStack Pro, multi-region, :4567
+modules/
+  vpc-base/
+  vpc-peering/
+  privatelink/
+  transit-gateway/
+  waf-v2/
 ```
 
-Key rules:
-- Each `environments/*` directory is a standalone root module.
-- `docs/subnet.csv` is the source of truth for CIDR allocation.
-- `prod/` composes `vpc-peering`, `privatelink`, and `transit-gateway` modules for real-world learning flows.
-
----
-## Target Architecture
-### dev/
-  - Single VPC (basic networking)
-  - Used for quick validation
-
-### prod/
-Enterprise-style topology:
-  - 3-tier VPC:
-    - Public (IGW)
-    - App (private)
-    - Data (isolated)
-  - Hub-spoke via Transit Gateway
-  - VPC Peering
-  - PrivateLink
+- Each `environments/*` directory is a **standalone** Terraform root module.
+- `prod/` composes `vpc-peering`, `privatelink`, `transit-gateway`, plus edge VPC and optional WAF.
 
 ---
 
-## Runbook (required workflow)
+## Runbook (after Terraform / module / script changes)
 
-After any Terraform/module/script adjustment, follow this exact flow.
-
-1. Start containers:
+1. **Start emulators**
 
 ```bash
 ./scripts/setup.sh
 ```
 
-2. Verify health:
+Requires **`LOCALSTACK_AUTH_TOKEN`** in the environment for LocalStack Pro (export locally, or GitHub Actions **Repository secret** — never commit tokens).
+
+2. **Health**
 
 ```bash
 curl -sf http://localhost:4566/_localstack/health
-curl -sf http://localhost:4567/_localstack/health
+curl -sf http://localhost:4567/_localstack/health   # if token was set
+# Optional (MiniStack native):
+curl -sf http://localhost:4566/_ministack/health
 ```
 
-3. Verify `dev` and `prod`
+3. **Validate dev and prod**
 
 ```bash
-# dev
 terraform -chdir=environments/dev fmt -check
 terraform -chdir=environments/dev init -input=false
 terraform -chdir=environments/dev validate
@@ -100,7 +84,6 @@ terraform -chdir=environments/dev apply -auto-approve
 terraform -chdir=environments/dev output
 terraform -chdir=environments/dev destroy -auto-approve
 
-# prod 
 terraform -chdir=environments/prod fmt -check
 terraform -chdir=environments/prod init -input=false
 terraform -chdir=environments/prod validate
@@ -109,375 +92,127 @@ terraform -chdir=environments/prod output
 terraform -chdir=environments/prod destroy -auto-approve
 ```
 
-5. Stop containers:
+4. **Stop**
 
 ```bash
 ./scripts/teardown.sh
 ```
 
-Optional local setup (if Terraform not installed):
-
-```bash
-# macOS / Linux (apt-based):
-sudo apt-get update -y && sudo apt-get install -y curl unzip
-curl -fsSL -o terraform.zip https://releases.hashicorp.com/terraform/1.5.7/terraform_1.5.7_linux_amd64.zip
-sudo unzip -o terraform.zip -d /usr/local/bin && rm terraform.zip
-terraform version
-```
-
-Notes:
-
-- `LOCALSTACK_AUTH_TOKEN` is required to start LocalStack Pro and run `prod`.
-- If token is missing, only `dev` can be fully verified.
+If `LOCALSTACK_AUTH_TOKEN` is unset, `setup.sh` still starts MiniStack; **full `prod` verification** needs the token.
 
 ---
 
-## Provider rules
+## Provider rules (all environments)
 
-For all environments:
-
-- Keep endpoint overrides.
+- Keep **`endpoints { ... }`** overrides pointing at the correct emulator ports.
 - Keep:
   - `skip_credentials_validation = true`
   - `skip_metadata_api_check = true`
   - `skip_requesting_account_id = true`
-  - `access_key = "test"`
-  - `secret_key = "test"`
-- Never use real AWS credentials, account IDs, or real ARNs.
+  - `access_key = "test"` / `secret_key = "test"`
+- Never use real AWS credentials, real account IDs, or real ARNs in lab code.
+
+### `hashicorp/aws` version and MiniStack
+
+- Use **`>= 4.0, < 4.67`** (see `providers.tf`) so `aws_vpc` refresh does not call **`DescribeVpcClassicLink`** (missing on MiniStack). See [docs/support.md](docs/support.md).
+- Other gaps: **`DescribeAddressesAttribute`** on `aws_eip` — still document in `support.md`; same pin helps avoid provider drift.
+- **Commit** `environments/dev/.terraform.lock.hcl` and `environments/prod/.terraform.lock.hcl` so CI resolves the same build.
+- AWS provider **5.x/6.x** on `dev` needs MiniStack to implement missing EC2 read APIs, or use workarounds in `support.md`.
+
+---
+
+## Known emulation limitations (short)
+
+| Resource | Where | Issue | Workaround |
+|----------|-------|-------|------------|
+| `aws_ec2_transit_gateway_peering_attachment_accepter` | LocalStack Pro | Provider waiter on `DescribeTransitGatewayPeeringAttachments` may never complete during apply. | Set `enable_tgw_cross_region_peering = false` in `modules/transit-gateway` / `prod/terraform.tfvars` (default). Real AWS may use `true`. |
+
+Full tables: **[docs/support.md](docs/support.md)**. MiniStack upstream: [releases](https://github.com/Nahuel990/ministack/releases).
 
 ---
 
 ## Allowed and disallowed Terraform commands
 
-Allowed:
+**Allowed:** `init`, `fmt`, `fmt -check`, `validate`, `plan`, `test`, `output`, `state list`, `state show <addr>`.
 
-- `terraform init`
-- `terraform fmt`
-- `terraform fmt -check`
-- `terraform validate`
-- `terraform plan`
-- `terraform test`
-- `terraform output`
-- `terraform state list`
-- `terraform state show <addr>`
+**Disallowed:** `import`, `state mv`, `state rm`, `state push`, `state pull`.
 
+Use `apply` / `destroy` only for **local emulator** validation and document intent.
 
 ---
 
-## Networking-specific guidance
+## Module selection
 
-- Keep focus on networking primitives only (VPC, subnet, route table, IGW, NAT, SG, peering, TGW, PrivateLink).
-- `prod` should reflect company-style topology:
-  - internet ingress at edge/public tier
-  - app tier private
-  - data tier isolated
-  - hub-spoke scaling through TGW
-- Avoid introducing EKS/app-platform scope unless explicitly asked.
+1. `modules/vpc-base/` for VPC / subnet / route / IGW / NAT patterns.
+2. Other `modules/*` when they fit.
+3. Plain `resource` blocks only if no module fits.
+4. External registry modules only when explicitly requested.
 
-## Known emulation limitations
-
-| Resource | Emulator | Issue | Workaround |
-|----------|----------|-------|------------|
-| `aws_ec2_transit_gateway_peering_attachment_accepter` | LocalStack Pro | Terraform provider's internal waiter polls `DescribeTransitGatewayPeeringAttachments` indefinitely; the state never reaches `available` during concurrent apply (CLI works standalone). No configurable timeout on this resource. | `enable_cross_region_peering = false` in `modules/transit-gateway` (default in `prod/terraform.tfvars`). Both TGWs + all spokes still deploy; only the cross-region peering link is skipped. Set `true` for real AWS. |
-
-### Provider compatibility note (lint/docs)
-- For MiniStack (`environments/dev`), pin provider to `hashicorp/aws` 4.x to avoid missing EC2 API actions (`DescribeVpcAttribute`, `DescribeAddressesAttribute`).
-- For LocalStack Pro (`environments/prod`), v5/v6 can work once MiniStack compatibility is not required.
-- Track MiniStack releases: https://github.com/Nahuel990/ministack/releases
-
----
-
-## Security and style
-
-- 2-space indentation.
-- `snake_case` for Terraform identifiers.
-- No secrets in `.tf` files or `terraform.tfvars`.
-- Keep changes scoped; avoid unrelated refactors.
-
-# AGENTS.md
-
-Guidance for AI coding agents (Claude Code, Cursor) working in this repository.
-
----
-
-## Purpose
-
-Learning and prototyping AWS infrastructure patterns using Terraform with dual emulators:
-
-- `environments/dev` uses **MiniStack** on `http://localhost:4566`
-- `environments/prod` uses **LocalStack Pro** on `http://localhost:4567`
-
-Both emulator containers run at the same time.
-
-| Target | Environments | Credentials | Endpoints | State backend |
-|--------|-------------|-------------|-----------|---------------|
-| **MiniStack** | `dev/` | dummy `test`/`test` | `http://localhost:4566` | local |
-| **LocalStack Pro** | `prod/` | dummy `test`/`test` | `http://localhost:4567` | local / S3 |
-
-**Scope:** Networking (VPC, VPC Peering, Transit Gateway, PrivateLink), Compute (EC2, Security Groups), Storage (S3, bucket policies), Identity (IAM roles, policies, instance profiles).
-
----
-
-## Repository layout
-
-```text
-tf-test/
-|- docs/
-|  |- report.md
-|  `- subnet.csv             # IP allocation table - consult before assigning CIDRs
-|- environments/
-|  |- dev/                   # MiniStack emulation (ap-southeast-1, :4566)
-|  |  |- providers.tf
-|  |  |- main.tf
-|  |  |- variables.tf
-|  |  |- outputs.tf
-|  |  `- terraform.tfvars
-|  `- prod/                  # LocalStack Pro emulation (multi-region, :4567)
-|     |- providers.tf
-|     |- main.tf
-|     |- variables.tf
-|     |- outputs.tf
-|     `- terraform.tfvars
-`- modules/
-   |- vpc-base/
-   |- vpc-peering/
-   |- privatelink/
-   `- transit-gateway/
-```
-
-Key rules:
-- Each `environments/*` directory is a standalone root module.
-- `docs/subnet.csv` is the source of truth for CIDR allocation.
-- `prod/` composes `vpc-peering`, `privatelink`, and `transit-gateway` modules for real-world learning flows.
-
----
-
-## Emulator runbook
-
-Start emulators:
-
-```bash
-./scripts/setup.sh
-```
-
-Health checks:
-
-```bash
-curl http://localhost:4566/_localstack/health
-curl http://localhost:4567/_localstack/health
-```
-
-Stop emulators:
-
-```bash
-./scripts/teardown.sh
-```
-
-Environment-to-emulator mapping:
-
-| Environment | Emulator | Host endpoint |
-|-------------|----------|---------------|
-| `environments/dev` | MiniStack | `http://localhost:4566` |
-| `environments/prod` | LocalStack Pro | `http://localhost:4567` |
-
-Notes:
-- `LOCALSTACK_AUTH_TOKEN` is required only for LocalStack Pro (`prod` flows).
-- If token is missing, `setup.sh` still starts MiniStack for `dev` workflows.
-
----
-
-## Environment context and provider rules
-
-### All environments (`dev/`, `prod/`)
-
-- Provider must include `endpoints {}` override block and these flags; do not remove:
-  - `skip_credentials_validation = true`
-  - `skip_metadata_api_check = true`
-  - `skip_requesting_account_id = true`
-  - `access_key = "test"`
-  - `secret_key = "test"`
-- Never use real AWS credentials, real account IDs, or real ARNs.
-
-### `dev/` (MiniStack)
-
-- Region: `ap-southeast-1`
-- Endpoint: `http://localhost:4566`
-- Primary module target: `modules/vpc-base`
-
-### `prod/` (LocalStack Pro)
-
-- Multi-region emulation
-- Endpoint: `http://localhost:4567`
-- Uses `modules/vpc-peering`, `modules/privatelink`, and `modules/transit-gateway`
-- Requires `LOCALSTACK_AUTH_TOKEN`
-
----
-
-## Allowed Terraform commands
-
-Agents may suggest or run:
-
-```bash
-terraform init
-terraform fmt
-terraform fmt -check
-terraform validate
-terraform plan
-terraform test
-terraform state list
-terraform state show <addr>
-terraform output
-```
-
-Never suggest or run:
-
-```bash
-terraform import
-terraform state mv
-terraform state rm
-terraform state push
-terraform state pull
-```
-
-If `apply`/`destroy` is needed for validation, explain intent clearly and keep usage scoped to controlled local emulation workflows.
-
----
-
-## Module selection rules
-
-Before writing a new resource block, check in this order:
-
-1. `modules/vpc-base/` for VPC/subnet/route table resources
-2. Existing modules under `modules/`
-3. Plain `resource` blocks if no module fits
-4. External registry modules only when explicitly requested
-
-Do not introduce new providers or external modules on your own initiative.
+Do not add new providers or external modules without a clear request.
 
 ---
 
 ## Service-specific guidance
 
-### S3
-- Use `aws_s3_bucket` plus separate `aws_s3_bucket_policy` (no inline bucket policy).
-- Add `aws_s3_bucket_versioning`, `aws_s3_bucket_server_side_encryption_configuration`, and `aws_s3_bucket_public_access_block` unless the exercise explicitly needs public access.
-
-### EC2
-- Always use explicit Security Group resources.
-- Prefer separate ingress/egress rule resources.
-- Do not hardcode AMI IDs for real AWS.
-- For emulation, an AMI variable placeholder is acceptable.
-
-### IAM
-- Prefer `aws_iam_role` + `aws_iam_role_policy_attachment`.
-- Build policies using `data "aws_iam_policy_document"`.
-- Follow least privilege; avoid wildcard resources unless explicitly required by the exercise.
-
-### VPC / Networking
-- Always check `docs/subnet.csv` before assigning CIDRs.
-- Reuse `modules/vpc-base` for new VPC patterns unless there is a documented exception.
+- **S3**: `aws_s3_bucket` + separate `aws_s3_bucket_policy`; add versioning, encryption, public access block unless the exercise needs public access.
+- **EC2**: Explicit security groups; prefer separate ingress/egress rules; no hardcoded real AMIs (placeholders OK for emulators).
+- **IAM**: `aws_iam_role` + `aws_iam_role_policy_attachment`; policies via `data "aws_iam_policy_document"`.
+- **VPC**: Always align CIDRs with `docs/subnet.csv`.
 
 ---
 
-## Emulation compatibility notes
+## Emulation compatibility (summary)
 
 | Capability | MiniStack (`dev`) | LocalStack Pro (`prod`) |
-|------------|-------------------|--------------------------|
-| EC2/VPC core resources | Good | Good |
-| VPC Peering | Basic behavior | Better parity |
+|------------|-------------------|---------------------------|
+| EC2 / VPC core | Good | Good |
+| VPC peering | Basic | Better parity |
 | Transit Gateway | Limited | Supported |
-| PrivateLink endpoint service | Limited | Supported |
-| IAM policy enforcement fidelity | Limited | Limited (emulated) |
+| PrivateLink | Limited | Supported |
+| IAM enforcement | Not real AWS | Emulated |
 
-When behavior differs from AWS, add a short inline note in Terraform code:
+When behavior differs from AWS:
 
 ```hcl
-# NOTE: Emulator limitation - describe what differs and why this resource is still useful in the lab
+# NOTE: Emulator limitation - what differs and why this resource is still useful in the lab
 ```
 
 ---
 
-## Code style
+## Code style and security
 
-- 2-space indentation.
-- `snake_case` naming for variables, locals, resources, outputs.
-- Descriptive resource labels; avoid opaque abbreviations.
-- Keep environment/module file layout consistent (`main.tf`, `variables.tf`, `outputs.tf`, `providers.tf`, `terraform.tfvars`).
-
----
-
-## Security and secrets
-
-- Never hardcode credentials, tokens, passwords, or account IDs in Terraform files.
-- `terraform.tfvars` must not contain secrets.
-- Keep `.tfstate` / `.tfstate.backup` ignored.
-- `LOCALSTACK_AUTH_TOKEN` must come from environment variables only.
+- 2-space indentation; `snake_case` for Terraform names.
+- No secrets in `.tf` or `terraform.tfvars`; keep `.tfstate` ignored.
+- `LOCALSTACK_AUTH_TOKEN` only via environment / CI secrets.
 
 ---
-## Linting with tflint
+
+## Linting (tflint)
+
 ```bash
-# Verify tflint is installed
 which tflint || echo "tflint not installed"
-
-# Check for .tflint.hcl configuration
-ls -la .tflint.hcl
-```
-
-Standard Linting Process
-
-```bash
-# Initialise tflint (first time or when plugins change)
 tflint --init
-
-# Run linting on current directory
-tflint
-
-# Run with more detailed output
-tflint --format compact
-
-# Run recursively on all modules
 tflint --recursive
 ```
 
-
----
-## Verification and Development (apply -> verify -> destroy)
-
-1. `./scripts/setup.sh`
-2. Verify health:
-   - `curl http://localhost:4566/_localstack/health`
-   - `curl http://localhost:4567/_localstack/health` (if token is set)
-3. Dev:
-   - `terraform -chdir=environments/dev init -input=false`
-   - `terraform -chdir=environments/dev apply -auto-approve`
-   - `terraform -chdir=environments/dev output`
-   - `terraform -chdir=environments/dev destroy -auto-approve`
-4. Prod (requires token):
-   - `terraform -chdir=environments/prod init -input=false`
-   - `terraform -chdir=environments/prod apply -auto-approve`
-   - `terraform -chdir=environments/prod output`
-   - `terraform -chdir=environments/prod destroy -auto-approve`
-5. `./scripts/teardown.sh`
-
 ---
 
-## Clarification-first rule
+## Clarification-first
 
-If a request is ambiguous, ask one short clarifying question before writing code, especially when it is unclear whether the target is `dev` (MiniStack) or `prod` (LocalStack Pro).
-
----
+If the target (`dev` vs `prod`) is unclear, ask one short question before coding.
 
 ## Strictly avoid
 
-- Proposing provider version upgrades unless asked
-- Renaming/moving resources between modules unless asked
-- Inventing CIDR blocks without reading `docs/subnet.csv`
-- Manual state file editing
-- Broad, unrelated diffs
+- Provider version upgrades unless asked or documented in `support.md` / this file.
+- Renaming/moving resources between modules unless asked.
+- Inventing CIDRs without `docs/subnet.csv`.
+- Manual state file edits.
+- Unrelated large diffs.
 
+---
 
-## Docs 
-- ./docs/support.md
-- ./docs/changelog.md
-- ./docs/report.md
- 
+## Docs
+
+- [docs/support.md](docs/support.md) — API coverage matrix and workarounds
+- [docs/changelog.md](docs/changelog.md)
+- [docs/report.md](docs/report.md)

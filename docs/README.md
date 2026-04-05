@@ -10,33 +10,111 @@ This report analyzes three primary AWS VPC connectivity solutions for enterprise
 
 ## 2. Architecture Diagrams
 
-### 2.1 VPC Peering (Cross-Region)
+### 2.1 Prod Environment Overview (Multi-Region, 3-Tier Production-Ready)
+
+Deployed across `ap-southeast-1` (Singapore) and `us-east-1` (N. Virginia) on LocalStack Pro, combining all 3 connectivity patterns with full 3-tier architecture (public/app/data) for each VPC.
+
+**VPC Summary:**
+| VPC | CIDR | Region | Pattern |
+|-----|------|--------|---------|
+| prod-edge-vpc | 10.7.0.0/16 | ap-southeast-1 | Edge/Ingress (3-tier) |
+| prod-peering-requester | 10.0.0.0/16 | ap-southeast-1 | VPC Peering (3-tier) |
+| prod-peering-accepter | 10.1.0.0/16 | us-east-1 | VPC Peering (3-tier) |
+| prod-pl-provider | 10.2.0.0/16 | ap-southeast-1 | PrivateLink Provider (3-tier) |
+| prod-pl-consumer | 10.3.0.0/16 | ap-southeast-1 | PrivateLink Consumer (3-tier) |
+| prod-tgw-spoke-1 | 10.4.0.0/16 | ap-southeast-1 | TGW Spoke (3-tier) |
+| prod-tgw-spoke-2 | 10.5.0.0/16 | ap-southeast-1 | TGW Spoke (3-tier) |
+| prod-tgw-spoke-dr | 10.6.0.0/16 | us-east-1 | TGW DR Spoke (3-tier) |
+
+```mermaid
+graph TD
+    subgraph sgRegion ["ap-southeast-1 (Singapore)"]
+        subgraph edgeVPC ["Edge VPC 10.7.0.0/16"]
+            EDGE_PUB["Public 10.7.1-2.0/24"]
+            EDGE_APP["App 10.7.11-12.0/24"]
+            EDGE_DATA["Data 10.7.21-22.0/24"]
+        end
+        
+        TGW_A["Transit Gateway A"]
+        
+        subgraph peerReq ["Peering Requester 10.0.0.0/16"]
+            PR_TIERS["3-tier subnets"]
+        end
+        
+        subgraph spoke1 ["TGW Spoke-1 10.4.0.0/16"]
+            S1_TIERS["3-tier subnets"]
+        end
+        
+        subgraph spoke2 ["TGW Spoke-2 10.5.0.0/16"]
+            S2_TIERS["3-tier subnets"]
+        end
+        
+        subgraph plProv ["PL Provider 10.2.0.0/16"]
+            PLP_TIERS["3-tier subnets"]
+        end
+        
+        subgraph plCons ["PL Consumer 10.3.0.0/16"]
+            PLC_TIERS["3-tier subnets"]
+        end
+        
+        S1_TIERS --> TGW_A
+        S2_TIERS --> TGW_A
+        PLP_TIERS -.->|"PrivateLink"| PLC_TIERS
+    end
+    
+    subgraph usRegion ["us-east-1 (N. Virginia)"]
+        TGW_B["Transit Gateway B"]
+        
+        subgraph peerAcc ["Peering Accepter 10.1.0.0/16"]
+            PA_TIERS["3-tier subnets"]
+        end
+        
+        subgraph spokeDR ["TGW Spoke-DR 10.6.0.0/16"]
+            SDR_TIERS["3-tier subnets"]
+        end
+        
+        SDR_TIERS --> TGW_B
+    end
+    
+    PR_TIERS <-->|"VPC Peering"| PA_TIERS
+    TGW_A <-->|"TGW Peering (optional)"| TGW_B
+```
+
+---
+
+### 2.2 VPC Peering (Cross-Region, 3-Tier)
 
 ```mermaid
 graph LR
-    subgraph "Region A (us-east-1)"
-        VA[VPC Requester<br/>10.0.0.0/16]
-        SA1[Subnet 10.0.1.0/24]
-        SA2[Subnet 10.0.2.0/24]
-        RTA[Route Table<br/>→ 10.1.0.0/16 via pcx]
-        VA --> SA1
-        VA --> SA2
-        SA1 --> RTA
-        SA2 --> RTA
+    subgraph reqRegion ["ap-southeast-1 (Singapore)"]
+        VA["VPC Requester 10.0.0.0/16"]
+        REQ_PUB["Public: 10.0.1-2.0/24"]
+        REQ_APP["App: 10.0.11-12.0/24"]
+        REQ_DATA["Data: 10.0.21-22.0/24"]
+        REQ_IGW["IGW"]
+        REQ_NAT["NAT GW"]
+        VA --> REQ_PUB
+        VA --> REQ_APP
+        VA --> REQ_DATA
+        REQ_PUB --> REQ_IGW
+        REQ_APP --> REQ_NAT
     end
     
-    subgraph "Region B (eu-west-1)"
-        VB[VPC Accepter<br/>10.1.0.0/16]
-        SB1[Subnet 10.1.1.0/24]
-        SB2[Subnet 10.1.2.0/24]
-        RTB[Route Table<br/>→ 10.0.0.0/16 via pcx]
-        VB --> SB1
-        VB --> SB2
-        SB1 --> RTB
-        SB2 --> RTB
+    subgraph accRegion ["us-east-1 (N. Virginia)"]
+        VB["VPC Accepter 10.1.0.0/16"]
+        ACC_PUB["Public: 10.1.1-2.0/24"]
+        ACC_APP["App: 10.1.11-12.0/24"]
+        ACC_DATA["Data: 10.1.21-22.0/24"]
+        ACC_IGW["IGW"]
+        ACC_NAT["NAT GW"]
+        VB --> ACC_PUB
+        VB --> ACC_APP
+        VB --> ACC_DATA
+        ACC_PUB --> ACC_IGW
+        ACC_APP --> ACC_NAT
     end
     
-    VA -->|VPC Peering Connection| VB
+    VA <-->|"VPC Peering Connection"| VB
 ```
 
 **Key characteristics:**
@@ -46,7 +124,7 @@ graph LR
 - CIDRs must not overlap
 - Security groups control traffic between peered VPCs
 
-### 2.2 AWS PrivateLink (Service-Level)
+### 2.3 AWS PrivateLink (Service-Level)
 
 ```mermaid
 graph LR
@@ -76,25 +154,42 @@ graph LR
 - Works cross-account natively
 - Traffic stays on AWS backbone, never touches internet
 
-### 2.3 AWS Transit Gateway (Hub-and-Spoke)
+### 2.4 AWS Transit Gateway (Hub-and-Spoke, 3-Tier)
 
 ```mermaid
 graph TD
-    subgraph "Region A (us-east-1)"
-        TGWA[Transit Gateway<br/>ASN 64512]
-        VPC1[VPC Spoke-1<br/>10.10.0.0/16]
-        VPC2[VPC Spoke-2<br/>10.11.0.0/16]
-        VPC1 -->|Attachment| TGWA
-        VPC2 -->|Attachment| TGWA
+    subgraph tgwRegionA ["ap-southeast-1 (Singapore)"]
+        TGWA["Transit Gateway ASN 64512"]
+        
+        subgraph spoke1 ["Spoke-1 VPC 10.4.0.0/16"]
+            S1_PUB["Public: 10.4.1-2.0/24"]
+            S1_APP["App: 10.4.11-12.0/24"]
+            S1_DATA["Data: 10.4.21-22.0/24"]
+        end
+        
+        subgraph spoke2 ["Spoke-2 VPC 10.5.0.0/16"]
+            S2_PUB["Public: 10.5.1-2.0/24"]
+            S2_APP["App: 10.5.11-12.0/24"]
+            S2_DATA["Data: 10.5.21-22.0/24"]
+        end
+        
+        S1_APP -->|"Attachment"| TGWA
+        S2_APP -->|"Attachment"| TGWA
     end
     
-    subgraph "Region B (eu-west-1)"
-        TGWB[Transit Gateway<br/>ASN 64513]
-        VPC3[VPC Spoke-3<br/>10.12.0.0/16]
-        VPC3 -->|Attachment| TGWB
+    subgraph tgwRegionB ["us-east-1 (N. Virginia)"]
+        TGWB["Transit Gateway ASN 64513"]
+        
+        subgraph spokeDR ["Spoke-DR VPC 10.6.0.0/16"]
+            SDR_PUB["Public: 10.6.1-2.0/24"]
+            SDR_APP["App: 10.6.11-12.0/24"]
+            SDR_DATA["Data: 10.6.21-22.0/24"]
+        end
+        
+        SDR_APP -->|"Attachment"| TGWB
     end
     
-    TGWA -->|TGW Peering| TGWB
+    TGWA <-->|"TGW Peering (optional)"| TGWB
 ```
 
 **Key characteristics:**
@@ -105,7 +200,7 @@ graph TD
 - Supports thousands of attachments
 - Route tables provide segmentation and traffic control
 
-### 2.4 AWS WAF v2 (Edge & Application Security)
+### 2.5 AWS WAF v2 (Edge & Application Security)
 
 ```mermaid
 graph LR
@@ -381,9 +476,9 @@ Tests use AWS CLI with MiniStack endpoints and dummy credentials for API validat
 Instead of deploying directly onto Real AWS, this entire project is targeting **MiniStack enterprise emulation**, incorporating realistic settings for learning and training purposes.
 
 ### IP / Subnet Design
-We apply a strict separation model for IP blocks across 7 different VPCs in 2 Regions to avoid IP overlap.
+We apply a strict separation model for IP blocks across 8 different VPCs in 2 Regions to avoid IP overlap. Each prod VPC follows the 3-tier architecture (public/app/data).
 
-*See detailed IP allocation plan in [subnet.csv](file:///home/duydo/Working/duynhne/tf-test/docs/subnet.csv)*.
+*See detailed IP allocation plan in [subnet.csv](./subnet.csv)*.
 
 ### 8.1 Dev Environment (3-AZ Full Setup)
 The Development environment contains 1 VPC located in `ap-southeast-1` (Singapore). It applies the `vpc-base` module with a standard enterprise emulation configuration:
@@ -418,43 +513,10 @@ graph TD
     end
 ```
 
-### 8.2 Prod Environment (Multi-Region / Emulation Features)
-Deployed across `ap-southeast-1` (Singapore) and `us-east-1` (N. Virginia) on LocalStack Pro, combining all 3 connectivity patterns. The layout includes TGW, VPC Peering, PrivateLink and WAF.
-
-```mermaid
-graph TD
-    subgraph "ap-southeast-1 (Singapore)"
-        EDGE_VPC["Edge VPC 10.0.0.0/16"]
-        TGW_A["TGW-A"]
-        PEER_A["VPC Peering Requester"]
-        PL_PROVIDER["PrivateLink Provider VPC"]
-        WAF_A["WAF v2 Web ACL"]
-
-        EDGE_VPC --> TGW_A
-        EDGE_VPC --> PEER_A
-        EDGE_VPC --> WAF_A
-        PL_PROVIDER -.->|PrivateLink| EDGE_VPC
-    end
-
-    subgraph "us-east-1 (N. Virginia)"
-        PEER_B["VPC Peering Accepter"]
-        TGW_B["TGW-B"]
-        PL_CONSUMER["PrivateLink Consumer VPC"]
-        WAF_B["WAF v2 Web ACL"]
-
-        PEER_B --> TGW_B
-        PEER_B --> WAF_B
-        PL_CONSUMER -.->|PrivateLink| PL_PROVIDER
-    end
-
-    TGW_A <-->|"TGW Peering"| TGW_B
-    PEER_A <-->|"VPC Peering"| PEER_B
-```
-
-### 8.3 Verification Steps
-- Affirm `terraform -chdir=environments/dev apply -auto-approve`
-- Affirm `terraform -chdir=environments/prod apply -auto-approve` (LOCALSTACK_AUTH_TOKEN cần có)
-- Chạy `terraform -chdir=environments/dev destroy -auto-approve` + `terraform -chdir=environments/prod destroy -auto-approve`
+### 8.2 Verification Steps
+- Run `terraform -chdir=environments/dev apply -auto-approve`
+- Run `terraform -chdir=environments/prod apply -auto-approve` (requires `LOCALSTACK_AUTH_TOKEN`)
+- Run `terraform -chdir=environments/dev destroy -auto-approve` and `terraform -chdir=environments/prod destroy -auto-approve`
 
 ---
 
@@ -464,22 +526,26 @@ graph TD
 
 ```
 modules/
-├── vpc-base/              # 3-Tier standalone VPC for Dev
-│   ├── main.tf           # VPC, IGW, NAT, subnets, RTs
+├── vpc-base/              # 3-Tier standalone VPC (used by dev + prod edge)
+│   ├── main.tf           # VPC, IGW, NAT, 3-tier subnets, RTs, SGs
 │   ├── variables.tf
 │   └── outputs.tf
-├── vpc-peering/           # Cross-region VPC peering
-│   ├── main.tf           # VPCs, subnets, peering, routes, security groups
-│   ├── variables.tf      # CIDRs, regions, tags
-│   └── outputs.tf        # VPC IDs, peering connection, route tables
-├── privatelink/          # PrivateLink service exposure
-│   ├── main.tf           # NLB, endpoint service, consumer endpoint
-│   ├── variables.tf      # Service ports, acceptance settings
-│   └── outputs.tf        # Endpoint service name, consumer endpoint ID
-└── transit-gateway/      # Hub-and-spoke networking
-    ├── main.tf           # TGWs, attachments, peering, route tables
-    ├── variables.tf      # Regions, ASN numbers, attachment settings
-    └── outputs.tf        # TGW IDs, attachment states, peering status
+├── vpc-peering/           # Cross-region VPC peering with 3-tier
+│   ├── main.tf           # 2 VPCs (3-tier each), IGW, NAT, peering, routes, SGs
+│   ├── variables.tf      # CIDRs, public/app/data subnets, NAT toggle
+│   └── outputs.tf        # VPC IDs, subnet IDs per tier, SG IDs
+├── privatelink/          # PrivateLink service exposure with 3-tier
+│   ├── main.tf           # Provider + Consumer VPCs (3-tier), NLB, endpoint
+│   ├── variables.tf      # CIDRs, public/app/data subnets, service port
+│   └── outputs.tf        # Endpoint service name, subnet IDs, SG IDs
+├── transit-gateway/      # Hub-and-spoke with 3-tier spokes
+│   ├── main.tf           # TGWs, spoke VPCs (3-tier), attachments, routes
+│   ├── variables.tf      # Spoke definitions with public/app/data subnets
+│   └── outputs.tf        # TGW IDs, spoke subnet IDs, SG IDs per tier
+└── waf-v2/               # WAF v2 Web ACL and IP sets
+    ├── main.tf           # Web ACL, rules, IP set, associations
+    ├── variables.tf
+    └── outputs.tf
 ```
 
 ### Environment Configurations

@@ -67,8 +67,8 @@
 | GetObjectRetention | ✅ | ✅ | v1.0.0+ | |
 | PutObjectLegalHold | ✅ | ✅ | v1.0.0+ | |
 | GetObjectLegalHold | ✅ | ✅ | v1.0.0+ | |
-| S3 disk persistence | ✅ | ✅ | v1.0.0+ | MiniStack: `S3_PERSIST=1` — LocalStack Pro: bật mặc định |
-| S3 Control ListTagsForResource | ✅ | ✅ | v1.1.14 | MiniStack fix: trả đúng tags thay vì empty list; routing fixed in v1.1.18 |
+| S3 disk persistence | ✅ | ✅ | v1.0.0+ | MiniStack: `S3_PERSIST=1` — LocalStack Pro: enabled by default |
+| S3 Control ListTagsForResource | ✅ | ✅ | v1.1.14 | MiniStack fix: returns correct tags instead of empty list; routing fixed in v1.1.18 |
 
 ---
 
@@ -112,7 +112,7 @@
 | TagRole / UntagRole | ✅ | ✅ | v1.0.0+ | |
 | TagUser / UntagUser | ✅ | ✅ | v1.0.0+ | |
 | TagPolicy / UntagPolicy | ✅ | ✅ | v1.0.0+ | |
-| IAM policy enforcement | ❌ | ✅ | — | MiniStack không enforce IAM policy thật |
+| IAM policy enforcement | ❌ | ✅ | — | MiniStack does not enforce IAM policies like real AWS |
 
 ---
 
@@ -131,10 +131,10 @@
 
 | Operation | MiniStack | LocalStack Pro | MiniStack Version | Notes |
 |---|---|---|---|---|
-| CreateWebACL | ✅ | ✅ | v1.1.17+ | WAFv2 core APIs được hỗ trợ
+| CreateWebACL | ✅ | ✅ | v1.1.17+ | WAFv2 core APIs supported
 | GetWebACL | ✅ | ✅ | v1.1.17+ | |
-| UpdateWebACL | ✅ | ✅ | v1.1.17+ | `LockToken` bắt buộc
-| DeleteWebACL | ✅ | ✅ | v1.1.17+ | `LockToken` bắt buộc
+| UpdateWebACL | ✅ | ✅ | v1.1.17+ | `LockToken` required
+| DeleteWebACL | ✅ | ✅ | v1.1.17+ | `LockToken` required
 | ListWebACLs | ✅ | ✅ | v1.1.17+ | |
 | AssociateWebACL | ✅ | ✅ | v1.1.17+ | |
 | DisassociateWebACL | ✅ | ✅ | v1.1.17+ | |
@@ -142,13 +142,13 @@
 | ListResourcesForWebACL | ✅ | ✅ | v1.1.17+ | |
 | CreateIPSet | ✅ | ✅ | v1.1.17+ | |
 | GetIPSet | ✅ | ✅ | v1.1.17+ | |
-| UpdateIPSet | ✅ | ✅ | v1.1.17+ | `LockToken` bắt buộc
-| DeleteIPSet | ✅ | ✅ | v1.1.17+ | `LockToken` bắt buộc
+| UpdateIPSet | ✅ | ✅ | v1.1.17+ | `LockToken` required
+| DeleteIPSet | ✅ | ✅ | v1.1.17+ | `LockToken` required
 | ListIPSets | ✅ | ✅ | v1.1.17+ | |
 | CreateRuleGroup | ✅ | ✅ | v1.1.17+ | |
 | GetRuleGroup | ✅ | ✅ | v1.1.17+ | |
-| UpdateRuleGroup | ✅ | ✅ | v1.1.17+ | `LockToken` bắt buộc
-| DeleteRuleGroup | ✅ | ✅ | v1.1.17+ | `LockToken` bắt buộc
+| UpdateRuleGroup | ✅ | ✅ | v1.1.17+ | `LockToken` required
+| DeleteRuleGroup | ✅ | ✅ | v1.1.17+ | `LockToken` required
 | ListRuleGroups | ✅ | ✅ | v1.1.17+ | |
 | TagResource | ✅ | ✅ | v1.1.17+ | |
 | UntagResource | ✅ | ✅ | v1.1.17+ | |
@@ -162,15 +162,15 @@
 
 | Operation | MiniStack | LocalStack Pro | MiniStack Version | Notes |
 |---|---|---|---|---|
-| RunInstances | ✅ | ✅ | v1.0.0+ | MiniStack: in-memory only, không có VM thật |
+| RunInstances | ✅ | ✅ | v1.0.0+ | MiniStack: in-memory only, no real VMs |
 | DescribeInstances | ✅ | ✅ | v1.0.0+ | |
 | TerminateInstances | ✅ | ✅ | v1.0.0+ | |
 | StopInstances | ✅ | ✅ | v1.0.0+ | |
 | StartInstances | ✅ | ✅ | v1.0.0+ | |
 | RebootInstances | ✅ | ✅ | v1.0.0+ | |
 | DescribeImages | ✅ | ✅ | v1.0.0+ | |
-| DescribeInstanceAttribute | ✅ | ✅ | v1.1.14 | Fix Terraform AWS Provider ≥ 6.0.0; hỗ trợ instanceType, userData, blockDeviceMapping, groupSet, v.v. |
-| DescribeInstanceTypes | ✅ | ✅ | v1.1.14 | 12 instance families: t2, t3, m5, c5, r5, p3, v.v. |
+| DescribeInstanceAttribute | ✅ | ✅ | v1.1.14 | Fix for Terraform AWS Provider ≥ 6.0.0; supports instanceType, userData, blockDeviceMapping, groupSet, etc. |
+| DescribeInstanceTypes | ✅ | ✅ | v1.1.14 | 12 instance families: t2, t3, m5, c5, r5, p3, etc. |
 | DescribeInstanceCreditSpecifications | ✅ | ✅ | v1.1.18 | Terraform v6 provider compatible stub for CPU credits |
 | DescribeInstanceMaintenanceOptions | ✅ | ✅ | v1.1.18 | Terraform v6 provider compatibility stub |
 | DescribeInstanceAutoRecoveryAttribute | ✅ | ✅ | v1.1.18 | Terraform v6 provider compatibility stub |
@@ -187,12 +187,12 @@
 
 | Operation | MiniStack | LocalStack Pro | MiniStack Version | Notes |
 |---|---|---|---|---|
-| CreateSecurityGroup | ✅ | ✅ | v1.0.0+ | Default SG luôn có sẵn; non-default SGs include allow-all egress rule (fixed in v1.1.18) |
+| CreateSecurityGroup | ✅ | ✅ | v1.0.0+ | Default SG always present; non-default SGs include allow-all egress rule (fixed in v1.1.18) |
 | DeleteSecurityGroup | ✅ | ✅ | v1.0.0+ | |
 | DescribeSecurityGroups | ✅ | ✅ | v1.0.0+ | vpc-id/group-name filters supported (v1.1.35) |
-| AuthorizeSecurityGroupIngress | ✅ | ✅ | v1.0.0+ | Rules stored, không enforced trên cả 2; deduplication fixed in v1.1.18 |
+| AuthorizeSecurityGroupIngress | ✅ | ✅ | v1.0.0+ | Rules stored, not enforced on either emulator; deduplication fixed in v1.1.18 |
 | RevokeSecurityGroupIngress | ✅ | ✅ | v1.0.0+ | |
-| AuthorizeSecurityGroupEgress | ✅ | ✅ | v1.0.0+ | Rules stored, không enforced trên cả 2; deduplication fixed in v1.1.18 |
+| AuthorizeSecurityGroupEgress | ✅ | ✅ | v1.0.0+ | Rules stored, not enforced on either emulator; deduplication fixed in v1.1.18 |
 | RevokeSecurityGroupEgress | ✅ | ✅ | v1.0.0+ | |
 
 ---
@@ -201,12 +201,13 @@
 
 | Operation | MiniStack | LocalStack Pro | MiniStack Version | Notes |
 |---|---|---|---|---|
-| CreateVpc | ✅ | ✅ | v1.0.0+ | Default VPC luôn có sẵn; per-VPC default resources (route table, NACL, SG) created in v1.1.35 |
+| CreateVpc | ✅ | ✅ | v1.0.0+ | Default VPC always present; per-VPC default resources (route table, NACL, SG) created in v1.1.35 |
 | DeleteVpc | ✅ | ✅ | v1.0.0+ | |
 | DescribeVpcs | ✅ | ✅ | v1.0.0+ | |
-| ModifyVpcAttribute | ✅ | ✅ | v1.0.0+ | Lưu EnableDnsSupport / EnableDnsHostnames vào state |
+| ModifyVpcAttribute | ✅ | ✅ | v1.0.0+ | Persists EnableDnsSupport / EnableDnsHostnames in state |
 | **DescribeVpcAttribute** | ✅ | ✅ | v1.1.32+ | **FIXED** — Now returns EnableDnsSupport, EnableDnsHostnames, EnableNetworkAddressUsageMetrics |
-| CreateSubnet | ✅ | ✅ | v1.0.0+ | Default subnet luôn có sẵn |
+| **DescribeVpcClassicLink** | ❌ | ✅ | — | **Missing** — required for Terraform `aws_vpc` refresh (`ClassicLinkEnabled`) with provider 4.67+ |
+| CreateSubnet | ✅ | ✅ | v1.0.0+ | Default subnet always present |
 | DeleteSubnet | ✅ | ✅ | v1.0.0+ | |
 | DescribeSubnets | ✅ | ✅ | v1.0.0+ | |
 | ModifySubnetAttribute | ✅ | ✅ | v1.0.0+ | |
@@ -225,12 +226,12 @@
 
 | Operation | MiniStack | LocalStack Pro | MiniStack Version | Notes |
 |---|---|---|---|---|
-| CreateInternetGateway | ✅ | ✅ | v1.0.0+ | Default IGW luôn có sẵn |
+| CreateInternetGateway | ✅ | ✅ | v1.0.0+ | Default IGW always present |
 | DeleteInternetGateway | ✅ | ✅ | v1.0.0+ | |
 | DescribeInternetGateways | ✅ | ✅ | v1.0.0+ | |
 | AttachInternetGateway | ✅ | ✅ | v1.0.0+ | |
 | DetachInternetGateway | ✅ | ✅ | v1.0.0+ | |
-| CreateRouteTable | ✅ | ✅ | v1.0.0+ | Default route table luôn có sẵn |
+| CreateRouteTable | ✅ | ✅ | v1.0.0+ | Default route table always present |
 | DeleteRouteTable | ✅ | ✅ | v1.0.0+ | |
 | DescribeRouteTables | ✅ | ✅ | v1.0.0+ | association.main, association.route-table-association-id, association.subnet-id, vpc-id filters supported (v1.1.34+) |
 | AssociateRouteTable | ✅ | ✅ | v1.0.0+ | |
@@ -257,7 +258,7 @@
 | AssociateAddress | ✅ | ✅ | v1.0.0+ | |
 | DisassociateAddress | ✅ | ✅ | v1.0.0+ | |
 | DescribeAddresses | ✅ | ✅ | v1.0.0+ | |
-| **DescribeAddressesAttribute** | ❌ | ✅ | — | **Missing** — `InvalidAction` khi Terraform refresh `aws_eip` |
+| **DescribeAddressesAttribute** | ❌ | ✅ | — | **Missing** — `InvalidAction` on Terraform refresh of `aws_eip` |
 
 ---
 
@@ -320,7 +321,7 @@
 | DeleteVolume | ✅ | ✅ | v1.0.0+ | |
 | DescribeVolumes | ✅ | ✅ | v1.0.0+ | |
 | DescribeVolumeStatus | ✅ | ✅ | v1.0.0+ | |
-| AttachVolume | ✅ | ✅ | v1.0.0+ | Cập nhật volume state khi attach/detach |
+| AttachVolume | ✅ | ✅ | v1.0.0+ | Updates volume state on attach/detach |
 | DetachVolume | ✅ | ✅ | v1.0.0+ | |
 | ModifyVolume | ✅ | ✅ | v1.0.0+ | |
 | DescribeVolumesModifications | ✅ | ✅ | v1.0.0+ | |
@@ -530,14 +531,16 @@
 
 ---
 
-## Known Missing APIs — cần patch thủ công
+## Known Missing APIs — patch MiniStack or pin provider
+
+The following APIs are **missing or incomplete** on MiniStack at the time of writing; **LocalStack Pro** usually has them. Per-operation detail is in the EC2 sections above (e.g. `DescribeVpcAttribute` is listed under **EC2 — VPC & Subnets** from MiniStack **v1.1.32+**).
 
 | API | Service | MiniStack | LocalStack Pro | Trigger | Workaround |
 |---|---|---|---|---|---|
-| `DescribeVpcAttribute` | EC2 | ❌ | ✅ | Terraform refresh `aws_vpc` (provider ≥ 5.x) | Patch `ec2.py` hoặc pin provider `~> 4.67` |
-| `DescribeAddressesAttribute` | EC2 | ❌ | ✅ | Terraform refresh `aws_eip` (provider ≥ 5.x) | Patch `ec2.py` hoặc tránh dùng `aws_eip` |
+| `DescribeAddressesAttribute` | EC2 | ❌ | ✅ | Terraform refresh of `aws_eip` (domain attributes / newer provider behavior) | Keep `hashicorp/aws` **>= 4.0, < 4.67** + commit `.terraform.lock.hcl`; or avoid `aws_eip` on `dev`; patch MiniStack `ec2.py` |
+| `DescribeVpcClassicLink` | EC2 | ❌ | ✅ | Terraform refresh of `aws_vpc` (`ClassicLinkEnabled`) — **hashicorp/aws 4.67+** | Commit lockfile with provider **≤ 4.66.x**, or `terraform destroy -refresh=false`; or patch MiniStack |
 
-*Note: Checked MiniStack releases up to v1.1.36 — DescribeVpcAttribute now supported (v1.1.32), DescribeAddressesAttribute still missing*
+*CLI check (MiniStack endpoint): `aws ec2 describe-addresses-attribute ... --endpoint-url=http://localhost:4566` returns `InvalidAction` while the API is missing. For `DescribeVpcAttribute`, use MiniStack image **≥ v1.1.32** (`docker pull nahuelnucera/ministack:latest`).*
 
 ---
 
@@ -577,14 +580,19 @@ MiniStack now supports state persistence for 20 services when `PERSIST_STATE=1`:
 enable_tgw_cross_region_peering = false
 ```
 
-### MiniStack Missing EC2 APIs
+### MiniStack vs Terraform AWS provider (EC2)
 
 **Observed in:** `environments/dev` on MiniStack
 
-**Symptom**  
-`terraform apply` fails with `Unknown EC2 action: DescribeVpcAttribute` or `DescribeAddressesAttribute`.
+**Symptoms**
 
-**Root Cause**  
-MiniStack does not implement these API actions called by the Terraform AWS provider during resource refresh.
+- `Unknown EC2 action: DescribeVpcAttribute` — MiniStack image older than **v1.1.32**, or `docker pull` not run for a newer build.
+- `Unknown EC2 action: DescribeAddressesAttribute` — when refreshing **`aws_eip`** (still missing on MiniStack at last check).
+- `Unknown EC2 action: DescribeVpcClassicLink` — when refreshing **`aws_vpc`** with **hashicorp/aws 4.67+** (provider reads `ClassicLinkEnabled`).
 
-*Workaround*: Use `terraform destroy -refresh=false -lock=false` to clean up partial state if apply fails, and pin the `hashicorp/aws` provider to `4.x`.
+**Workarounds**
+
+1. **Pin versions**: Use `hashicorp/aws` **>= 4.0, < 4.67** and **commit** `environments/dev/.terraform.lock.hcl` and `environments/prod/.terraform.lock.hcl` so CI does not resolve a different provider build.
+2. If you hit **ClassicLink** with 4.67: lock the provider in the lockfile to **4.66.x** (or another verified version) until MiniStack implements the API.
+3. Clean up failed state: `terraform destroy -refresh=false -auto-approve` (after a partial apply).
+4. Full API tables: **EC2** sections in this document and [MiniStack releases](https://github.com/Nahuel990/ministack/releases).

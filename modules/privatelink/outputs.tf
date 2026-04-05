@@ -37,3 +37,75 @@ output "nlb_dns_name" {
   description = "NLB DNS name"
   value       = aws_lb.service.dns_name
 }
+
+# Provider outputs
+output "provider_public_subnet_ids" {
+  description = "Provider public subnet IDs"
+  value       = aws_subnet.provider_public[*].id
+}
+
+output "provider_app_subnet_ids" {
+  description = "Provider app subnet IDs"
+  value       = aws_subnet.provider_app[*].id
+}
+
+output "provider_data_subnet_ids" {
+  description = "Provider data subnet IDs"
+  value       = aws_subnet.provider_data[*].id
+}
+
+output "provider_public_sg_id" {
+  description = "Provider public security group ID"
+  value       = aws_security_group.provider_public.id
+}
+
+output "provider_app_sg_id" {
+  description = "Provider app security group ID"
+  value       = aws_security_group.provider_app.id
+}
+
+output "provider_data_sg_id" {
+  description = "Provider data security group ID"
+  value       = aws_security_group.provider_data.id
+}
+
+output "provider_nat_gateway_id" {
+  description = "Provider NAT Gateway ID"
+  value       = var.enable_nat_gateway ? aws_nat_gateway.provider[0].id : null
+}
+
+# Consumer outputs
+output "consumer_public_subnet_ids" {
+  description = "Consumer public subnet IDs"
+  value       = aws_subnet.consumer_public[*].id
+}
+
+output "consumer_app_subnet_ids" {
+  description = "Consumer app subnet IDs"
+  value       = aws_subnet.consumer_app[*].id
+}
+
+output "consumer_data_subnet_ids" {
+  description = "Consumer data subnet IDs"
+  value       = aws_subnet.consumer_data[*].id
+}
+
+output "consumer_public_sg_id" {
+  description = "Consumer public security group ID"
+  value       = aws_security_group.consumer_public.id
+}
+
+output "consumer_app_sg_id" {
+  description = "Consumer app security group ID"
+  value       = aws_security_group.consumer_app.id
+}
+
+output "consumer_data_sg_id" {
+  description = "Consumer data security group ID"
+  value       = aws_security_group.consumer_data.id
+}
+
+output "consumer_nat_gateway_id" {
+  description = "Consumer NAT Gateway ID"
+  value       = var.enable_nat_gateway ? aws_nat_gateway.consumer[0].id : null
+}

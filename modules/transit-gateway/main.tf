@@ -1,9 +1,9 @@
 ###############################################################################
-# Transit Gateway Module – Hub-and-Spoke, Multi-Region
+# Transit Gateway Module – Hub-and-Spoke, Multi-Region, 3-Tier Architecture
 #
-# Region A: TGW + spoke-1, spoke-2 VPC attachments
-# Region B: TGW + spoke-3 VPC attachment
-# Cross-region: TGW peering between region A and region B
+# Region A: TGW + spoke VPCs (3-tier each) with attachments
+# Region B: TGW + spoke VPCs (3-tier each) with attachments
+# Cross-region: Optional TGW peering between region A and region B
 ###############################################################################
 
 terraform {
@@ -12,19 +12,32 @@ terraform {
   required_providers {
     aws = {
       source                = "hashicorp/aws"
-      version               = ">= 4.0"
+      version               = ">= 4.0, < 4.67"
       configuration_aliases = [aws.region_a, aws.region_b]
     }
   }
 }
 
+data "aws_region" "a" {
+  provider = aws.region_a
+}
+
+data "aws_region" "b" {
+  provider = aws.region_b
+}
+
 locals {
+  region_a_azs = ["${data.aws_region.a.name}a", "${data.aws_region.a.name}b"]
+  region_b_azs = ["${data.aws_region.b.name}a", "${data.aws_region.b.name}b"]
+
   all_spoke_cidrs_a = [for k, v in var.spoke_vpcs : v.cidr]
   all_spoke_cidrs_b = [for k, v in var.spoke_vpcs_region_b : v.cidr]
   all_spoke_cidrs   = concat(local.all_spoke_cidrs_a, local.all_spoke_cidrs_b)
 }
 
-# ─── Transit Gateway – Region A ─────────────────────────────────────────────
+###############################################################################
+# TRANSIT GATEWAY – Region A
+###############################################################################
 
 resource "aws_ec2_transit_gateway" "region_a" {
   provider                        = aws.region_a
@@ -36,7 +49,9 @@ resource "aws_ec2_transit_gateway" "region_a" {
   tags = merge(var.tags, { Name = "tgw-region-a" })
 }
 
-# ─── Spoke VPCs – Region A ──────────────────────────────────────────────────
+###############################################################################
+# SPOKE VPCs – Region A (3-Tier)
+###############################################################################
 
 resource "aws_vpc" "spoke_a" {
   provider             = aws.region_a
@@ -48,59 +63,278 @@ resource "aws_vpc" "spoke_a" {
   tags = merge(var.tags, { Name = each.key })
 }
 
-resource "aws_subnet" "spoke_a" {
+# ─── Internet Gateways – Region A ────────────────────────────────────────────
+
+resource "aws_internet_gateway" "spoke_a" {
+  provider = aws.region_a
+  for_each = var.spoke_vpcs
+  vpc_id   = aws_vpc.spoke_a[each.key].id
+
+  tags = merge(var.tags, { Name = "${each.key}-igw" })
+}
+
+# ─── Public Subnets – Region A ───────────────────────────────────────────────
+
+resource "aws_subnet" "spoke_a_public" {
   provider = aws.region_a
   for_each = {
     for item in flatten([
       for vpc_key, vpc in var.spoke_vpcs : [
-        for idx, subnet_cidr in vpc.subnets : {
-          key        = "${vpc_key}-${idx}"
+        for idx, subnet_cidr in vpc.public_subnets : {
+          key        = "${vpc_key}-public-${idx}"
           vpc_key    = vpc_key
           cidr_block = subnet_cidr
+          az         = local.region_a_azs[idx % length(local.region_a_azs)]
         }
       ]
     ]) : item.key => item
   }
 
-  vpc_id     = aws_vpc.spoke_a[each.value.vpc_key].id
-  cidr_block = each.value.cidr_block
+  vpc_id                  = aws_vpc.spoke_a[each.value.vpc_key].id
+  cidr_block              = each.value.cidr_block
+  availability_zone       = each.value.az
+  map_public_ip_on_launch = true
 
-  tags = merge(var.tags, { Name = each.key })
+  tags = merge(var.tags, {
+    Name = each.key
+    Tier = "Public"
+  })
 }
 
-resource "aws_route_table" "spoke_a" {
+resource "aws_route_table" "spoke_a_public" {
   provider = aws.region_a
   for_each = var.spoke_vpcs
   vpc_id   = aws_vpc.spoke_a[each.key].id
 
-  tags = merge(var.tags, { Name = "${each.key}-rt" })
+  tags = merge(var.tags, { Name = "${each.key}-public-rt" })
 }
 
-resource "aws_route_table_association" "spoke_a" {
+resource "aws_route" "spoke_a_public_igw" {
+  provider               = aws.region_a
+  for_each               = var.spoke_vpcs
+  route_table_id         = aws_route_table.spoke_a_public[each.key].id
+  destination_cidr_block = "0.0.0.0/0"
+  gateway_id             = aws_internet_gateway.spoke_a[each.key].id
+}
+
+resource "aws_route_table_association" "spoke_a_public" {
   provider = aws.region_a
   for_each = {
     for item in flatten([
       for vpc_key, vpc in var.spoke_vpcs : [
-        for idx, subnet_cidr in vpc.subnets : {
-          key     = "${vpc_key}-${idx}"
+        for idx, subnet_cidr in vpc.public_subnets : {
+          key     = "${vpc_key}-public-${idx}"
           vpc_key = vpc_key
         }
       ]
     ]) : item.key => item
   }
 
-  subnet_id      = aws_subnet.spoke_a[each.key].id
-  route_table_id = aws_route_table.spoke_a[each.value.vpc_key].id
+  subnet_id      = aws_subnet.spoke_a_public[each.key].id
+  route_table_id = aws_route_table.spoke_a_public[each.value.vpc_key].id
 }
 
-resource "aws_security_group" "spoke_a" {
+# ─── NAT Gateways – Region A (1 per VPC) ─────────────────────────────────────
+
+resource "aws_eip" "spoke_a_nat" {
+  provider = aws.region_a
+  for_each = var.enable_nat_gateway ? var.spoke_vpcs : {}
+  vpc      = true
+
+  tags = merge(var.tags, { Name = "${each.key}-nat-eip" })
+
+  depends_on = [aws_internet_gateway.spoke_a]
+}
+
+resource "aws_nat_gateway" "spoke_a" {
+  provider = aws.region_a
+  for_each = var.enable_nat_gateway ? var.spoke_vpcs : {}
+
+  allocation_id = aws_eip.spoke_a_nat[each.key].id
+  subnet_id = [
+    for k, s in aws_subnet.spoke_a_public : s.id
+    if startswith(k, "${each.key}-public-0")
+  ][0]
+
+  tags = merge(var.tags, { Name = "${each.key}-nat" })
+
+  depends_on = [aws_internet_gateway.spoke_a]
+}
+
+# ─── App Subnets – Region A ──────────────────────────────────────────────────
+
+resource "aws_subnet" "spoke_a_app" {
+  provider = aws.region_a
+  for_each = {
+    for item in flatten([
+      for vpc_key, vpc in var.spoke_vpcs : [
+        for idx, subnet_cidr in vpc.app_subnets : {
+          key        = "${vpc_key}-app-${idx}"
+          vpc_key    = vpc_key
+          cidr_block = subnet_cidr
+          az         = local.region_a_azs[idx % length(local.region_a_azs)]
+        }
+      ]
+    ]) : item.key => item
+  }
+
+  vpc_id            = aws_vpc.spoke_a[each.value.vpc_key].id
+  cidr_block        = each.value.cidr_block
+  availability_zone = each.value.az
+
+  tags = merge(var.tags, {
+    Name = each.key
+    Tier = "Private-App"
+  })
+}
+
+resource "aws_route_table" "spoke_a_app" {
+  provider = aws.region_a
+  for_each = var.spoke_vpcs
+  vpc_id   = aws_vpc.spoke_a[each.key].id
+
+  tags = merge(var.tags, { Name = "${each.key}-app-rt" })
+}
+
+resource "aws_route" "spoke_a_app_nat" {
+  provider               = aws.region_a
+  for_each               = var.enable_nat_gateway ? var.spoke_vpcs : {}
+  route_table_id         = aws_route_table.spoke_a_app[each.key].id
+  destination_cidr_block = "0.0.0.0/0"
+  nat_gateway_id         = aws_nat_gateway.spoke_a[each.key].id
+}
+
+resource "aws_route_table_association" "spoke_a_app" {
+  provider = aws.region_a
+  for_each = {
+    for item in flatten([
+      for vpc_key, vpc in var.spoke_vpcs : [
+        for idx, subnet_cidr in vpc.app_subnets : {
+          key     = "${vpc_key}-app-${idx}"
+          vpc_key = vpc_key
+        }
+      ]
+    ]) : item.key => item
+  }
+
+  subnet_id      = aws_subnet.spoke_a_app[each.key].id
+  route_table_id = aws_route_table.spoke_a_app[each.value.vpc_key].id
+}
+
+# ─── Data Subnets – Region A ─────────────────────────────────────────────────
+
+resource "aws_subnet" "spoke_a_data" {
+  provider = aws.region_a
+  for_each = {
+    for item in flatten([
+      for vpc_key, vpc in var.spoke_vpcs : [
+        for idx, subnet_cidr in vpc.data_subnets : {
+          key        = "${vpc_key}-data-${idx}"
+          vpc_key    = vpc_key
+          cidr_block = subnet_cidr
+          az         = local.region_a_azs[idx % length(local.region_a_azs)]
+        }
+      ]
+    ]) : item.key => item
+  }
+
+  vpc_id            = aws_vpc.spoke_a[each.value.vpc_key].id
+  cidr_block        = each.value.cidr_block
+  availability_zone = each.value.az
+
+  tags = merge(var.tags, {
+    Name = each.key
+    Tier = "Private-Data"
+  })
+}
+
+resource "aws_route_table" "spoke_a_data" {
+  provider = aws.region_a
+  for_each = var.spoke_vpcs
+  vpc_id   = aws_vpc.spoke_a[each.key].id
+
+  tags = merge(var.tags, { Name = "${each.key}-data-rt" })
+}
+
+resource "aws_route" "spoke_a_data_nat" {
+  provider               = aws.region_a
+  for_each               = var.enable_nat_gateway ? var.spoke_vpcs : {}
+  route_table_id         = aws_route_table.spoke_a_data[each.key].id
+  destination_cidr_block = "0.0.0.0/0"
+  nat_gateway_id         = aws_nat_gateway.spoke_a[each.key].id
+}
+
+resource "aws_route_table_association" "spoke_a_data" {
+  provider = aws.region_a
+  for_each = {
+    for item in flatten([
+      for vpc_key, vpc in var.spoke_vpcs : [
+        for idx, subnet_cidr in vpc.data_subnets : {
+          key     = "${vpc_key}-data-${idx}"
+          vpc_key = vpc_key
+        }
+      ]
+    ]) : item.key => item
+  }
+
+  subnet_id      = aws_subnet.spoke_a_data[each.key].id
+  route_table_id = aws_route_table.spoke_a_data[each.value.vpc_key].id
+}
+
+# ─── Security Groups – Region A ──────────────────────────────────────────────
+
+resource "aws_security_group" "spoke_a_public" {
   provider    = aws.region_a
   for_each    = var.spoke_vpcs
-  name        = "${each.key}-sg"
-  description = "Allow traffic from all spokes"
+  name        = "${each.key}-public-sg"
+  description = "Public tier SG"
   vpc_id      = aws_vpc.spoke_a[each.key].id
 
   ingress {
+    description = "HTTP"
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    #trivy:ignore:aws-0107 - Lab environment
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    description = "HTTPS"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    #trivy:ignore:aws-0107 - Lab environment
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = merge(var.tags, { Name = "${each.key}-public-sg" })
+}
+
+resource "aws_security_group" "spoke_a_app" {
+  provider    = aws.region_a
+  for_each    = var.spoke_vpcs
+  name        = "${each.key}-app-sg"
+  description = "App tier SG - allows traffic from public tier and all spokes via TGW"
+  vpc_id      = aws_vpc.spoke_a[each.key].id
+
+  ingress {
+    description     = "All from public tier"
+    from_port       = 0
+    to_port         = 0
+    protocol        = "-1"
+    security_groups = [aws_security_group.spoke_a_public[each.key].id]
+  }
+
+  ingress {
+    description = "All from spoke VPCs via TGW"
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
@@ -108,17 +342,57 @@ resource "aws_security_group" "spoke_a" {
   }
 
   egress {
-    from_port = 0
-    to_port   = 0
-    protocol  = "-1"
-    #trivy:ignore:aws-0104 - Unrestricted egress required for spoke VPC connectivity testing
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = merge(var.tags, { Name = "${each.key}-sg" })
+  tags = merge(var.tags, { Name = "${each.key}-app-sg" })
 }
 
-# ─── TGW VPC Attachments – Region A ─────────────────────────────────────────
+resource "aws_security_group" "spoke_a_data" {
+  provider    = aws.region_a
+  for_each    = var.spoke_vpcs
+  name        = "${each.key}-data-sg"
+  description = "Data tier SG"
+  vpc_id      = aws_vpc.spoke_a[each.key].id
+
+  ingress {
+    description     = "MySQL from app tier"
+    from_port       = 3306
+    to_port         = 3306
+    protocol        = "tcp"
+    security_groups = [aws_security_group.spoke_a_app[each.key].id]
+  }
+
+  ingress {
+    description     = "PostgreSQL from app tier"
+    from_port       = 5432
+    to_port         = 5432
+    protocol        = "tcp"
+    security_groups = [aws_security_group.spoke_a_app[each.key].id]
+  }
+
+  ingress {
+    description     = "Redis from app tier"
+    from_port       = 6379
+    to_port         = 6379
+    protocol        = "tcp"
+    security_groups = [aws_security_group.spoke_a_app[each.key].id]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = merge(var.tags, { Name = "${each.key}-data-sg" })
+}
+
+# ─── TGW VPC Attachments – Region A (use app subnets) ────────────────────────
 
 resource "aws_ec2_transit_gateway_vpc_attachment" "spoke_a" {
   provider           = aws.region_a
@@ -126,21 +400,22 @@ resource "aws_ec2_transit_gateway_vpc_attachment" "spoke_a" {
   transit_gateway_id = aws_ec2_transit_gateway.region_a.id
   vpc_id             = aws_vpc.spoke_a[each.key].id
   subnet_ids = [
-    for k, s in aws_subnet.spoke_a : s.id
-    if startswith(k, each.key)
+    for k, s in aws_subnet.spoke_a_app : s.id
+    if startswith(k, "${each.key}-app-")
   ]
 
   tags = merge(var.tags, { Name = "${each.key}-tgw-attachment" })
 }
 
-# Routes from spoke VPCs to TGW (Region A)
-resource "aws_route" "spoke_a_to_tgw" {
+# ─── Routes to TGW – Region A (all tiers) ────────────────────────────────────
+
+resource "aws_route" "spoke_a_public_to_tgw" {
   provider = aws.region_a
   for_each = {
     for item in flatten([
       for vpc_key, vpc in var.spoke_vpcs : [
         for dest_cidr in local.all_spoke_cidrs : {
-          key       = "${vpc_key}-to-${dest_cidr}"
+          key       = "${vpc_key}-public-to-${replace(dest_cidr, "/", "-")}"
           vpc_key   = vpc_key
           dest_cidr = dest_cidr
         }
@@ -149,14 +424,60 @@ resource "aws_route" "spoke_a_to_tgw" {
     ]) : item.key => item
   }
 
-  route_table_id         = aws_route_table.spoke_a[each.value.vpc_key].id
+  route_table_id         = aws_route_table.spoke_a_public[each.value.vpc_key].id
   destination_cidr_block = each.value.dest_cidr
   transit_gateway_id     = aws_ec2_transit_gateway.region_a.id
 
   depends_on = [aws_ec2_transit_gateway_vpc_attachment.spoke_a]
 }
 
-# ─── Transit Gateway – Region B ─────────────────────────────────────────────
+resource "aws_route" "spoke_a_app_to_tgw" {
+  provider = aws.region_a
+  for_each = {
+    for item in flatten([
+      for vpc_key, vpc in var.spoke_vpcs : [
+        for dest_cidr in local.all_spoke_cidrs : {
+          key       = "${vpc_key}-app-to-${replace(dest_cidr, "/", "-")}"
+          vpc_key   = vpc_key
+          dest_cidr = dest_cidr
+        }
+        if dest_cidr != vpc.cidr
+      ]
+    ]) : item.key => item
+  }
+
+  route_table_id         = aws_route_table.spoke_a_app[each.value.vpc_key].id
+  destination_cidr_block = each.value.dest_cidr
+  transit_gateway_id     = aws_ec2_transit_gateway.region_a.id
+
+  depends_on = [aws_ec2_transit_gateway_vpc_attachment.spoke_a]
+}
+
+resource "aws_route" "spoke_a_data_to_tgw" {
+  provider = aws.region_a
+  for_each = {
+    for item in flatten([
+      for vpc_key, vpc in var.spoke_vpcs : [
+        for dest_cidr in local.all_spoke_cidrs : {
+          key       = "${vpc_key}-data-to-${replace(dest_cidr, "/", "-")}"
+          vpc_key   = vpc_key
+          dest_cidr = dest_cidr
+        }
+        if dest_cidr != vpc.cidr
+      ]
+    ]) : item.key => item
+  }
+
+  route_table_id         = aws_route_table.spoke_a_data[each.value.vpc_key].id
+  destination_cidr_block = each.value.dest_cidr
+  transit_gateway_id     = aws_ec2_transit_gateway.region_a.id
+
+  depends_on = [aws_ec2_transit_gateway_vpc_attachment.spoke_a]
+}
+
+###############################################################################
+# TRANSIT GATEWAY – Region B
+###############################################################################
 
 resource "aws_ec2_transit_gateway" "region_b" {
   provider                        = aws.region_b
@@ -168,7 +489,9 @@ resource "aws_ec2_transit_gateway" "region_b" {
   tags = merge(var.tags, { Name = "tgw-region-b" })
 }
 
-# ─── Spoke VPCs – Region B ──────────────────────────────────────────────────
+###############################################################################
+# SPOKE VPCs – Region B (3-Tier)
+###############################################################################
 
 resource "aws_vpc" "spoke_b" {
   provider             = aws.region_b
@@ -180,59 +503,278 @@ resource "aws_vpc" "spoke_b" {
   tags = merge(var.tags, { Name = each.key })
 }
 
-resource "aws_subnet" "spoke_b" {
+# ─── Internet Gateways – Region B ────────────────────────────────────────────
+
+resource "aws_internet_gateway" "spoke_b" {
+  provider = aws.region_b
+  for_each = var.spoke_vpcs_region_b
+  vpc_id   = aws_vpc.spoke_b[each.key].id
+
+  tags = merge(var.tags, { Name = "${each.key}-igw" })
+}
+
+# ─── Public Subnets – Region B ───────────────────────────────────────────────
+
+resource "aws_subnet" "spoke_b_public" {
   provider = aws.region_b
   for_each = {
     for item in flatten([
       for vpc_key, vpc in var.spoke_vpcs_region_b : [
-        for idx, subnet_cidr in vpc.subnets : {
-          key        = "${vpc_key}-${idx}"
+        for idx, subnet_cidr in vpc.public_subnets : {
+          key        = "${vpc_key}-public-${idx}"
           vpc_key    = vpc_key
           cidr_block = subnet_cidr
+          az         = local.region_b_azs[idx % length(local.region_b_azs)]
         }
       ]
     ]) : item.key => item
   }
 
-  vpc_id     = aws_vpc.spoke_b[each.value.vpc_key].id
-  cidr_block = each.value.cidr_block
+  vpc_id                  = aws_vpc.spoke_b[each.value.vpc_key].id
+  cidr_block              = each.value.cidr_block
+  availability_zone       = each.value.az
+  map_public_ip_on_launch = true
 
-  tags = merge(var.tags, { Name = each.key })
+  tags = merge(var.tags, {
+    Name = each.key
+    Tier = "Public"
+  })
 }
 
-resource "aws_route_table" "spoke_b" {
+resource "aws_route_table" "spoke_b_public" {
   provider = aws.region_b
   for_each = var.spoke_vpcs_region_b
   vpc_id   = aws_vpc.spoke_b[each.key].id
 
-  tags = merge(var.tags, { Name = "${each.key}-rt" })
+  tags = merge(var.tags, { Name = "${each.key}-public-rt" })
 }
 
-resource "aws_route_table_association" "spoke_b" {
+resource "aws_route" "spoke_b_public_igw" {
+  provider               = aws.region_b
+  for_each               = var.spoke_vpcs_region_b
+  route_table_id         = aws_route_table.spoke_b_public[each.key].id
+  destination_cidr_block = "0.0.0.0/0"
+  gateway_id             = aws_internet_gateway.spoke_b[each.key].id
+}
+
+resource "aws_route_table_association" "spoke_b_public" {
   provider = aws.region_b
   for_each = {
     for item in flatten([
       for vpc_key, vpc in var.spoke_vpcs_region_b : [
-        for idx, subnet_cidr in vpc.subnets : {
-          key     = "${vpc_key}-${idx}"
+        for idx, subnet_cidr in vpc.public_subnets : {
+          key     = "${vpc_key}-public-${idx}"
           vpc_key = vpc_key
         }
       ]
     ]) : item.key => item
   }
 
-  subnet_id      = aws_subnet.spoke_b[each.key].id
-  route_table_id = aws_route_table.spoke_b[each.value.vpc_key].id
+  subnet_id      = aws_subnet.spoke_b_public[each.key].id
+  route_table_id = aws_route_table.spoke_b_public[each.value.vpc_key].id
 }
 
-resource "aws_security_group" "spoke_b" {
+# ─── NAT Gateways – Region B (1 per VPC) ─────────────────────────────────────
+
+resource "aws_eip" "spoke_b_nat" {
+  provider = aws.region_b
+  for_each = var.enable_nat_gateway ? var.spoke_vpcs_region_b : {}
+  vpc      = true
+
+  tags = merge(var.tags, { Name = "${each.key}-nat-eip" })
+
+  depends_on = [aws_internet_gateway.spoke_b]
+}
+
+resource "aws_nat_gateway" "spoke_b" {
+  provider = aws.region_b
+  for_each = var.enable_nat_gateway ? var.spoke_vpcs_region_b : {}
+
+  allocation_id = aws_eip.spoke_b_nat[each.key].id
+  subnet_id = [
+    for k, s in aws_subnet.spoke_b_public : s.id
+    if startswith(k, "${each.key}-public-0")
+  ][0]
+
+  tags = merge(var.tags, { Name = "${each.key}-nat" })
+
+  depends_on = [aws_internet_gateway.spoke_b]
+}
+
+# ─── App Subnets – Region B ──────────────────────────────────────────────────
+
+resource "aws_subnet" "spoke_b_app" {
+  provider = aws.region_b
+  for_each = {
+    for item in flatten([
+      for vpc_key, vpc in var.spoke_vpcs_region_b : [
+        for idx, subnet_cidr in vpc.app_subnets : {
+          key        = "${vpc_key}-app-${idx}"
+          vpc_key    = vpc_key
+          cidr_block = subnet_cidr
+          az         = local.region_b_azs[idx % length(local.region_b_azs)]
+        }
+      ]
+    ]) : item.key => item
+  }
+
+  vpc_id            = aws_vpc.spoke_b[each.value.vpc_key].id
+  cidr_block        = each.value.cidr_block
+  availability_zone = each.value.az
+
+  tags = merge(var.tags, {
+    Name = each.key
+    Tier = "Private-App"
+  })
+}
+
+resource "aws_route_table" "spoke_b_app" {
+  provider = aws.region_b
+  for_each = var.spoke_vpcs_region_b
+  vpc_id   = aws_vpc.spoke_b[each.key].id
+
+  tags = merge(var.tags, { Name = "${each.key}-app-rt" })
+}
+
+resource "aws_route" "spoke_b_app_nat" {
+  provider               = aws.region_b
+  for_each               = var.enable_nat_gateway ? var.spoke_vpcs_region_b : {}
+  route_table_id         = aws_route_table.spoke_b_app[each.key].id
+  destination_cidr_block = "0.0.0.0/0"
+  nat_gateway_id         = aws_nat_gateway.spoke_b[each.key].id
+}
+
+resource "aws_route_table_association" "spoke_b_app" {
+  provider = aws.region_b
+  for_each = {
+    for item in flatten([
+      for vpc_key, vpc in var.spoke_vpcs_region_b : [
+        for idx, subnet_cidr in vpc.app_subnets : {
+          key     = "${vpc_key}-app-${idx}"
+          vpc_key = vpc_key
+        }
+      ]
+    ]) : item.key => item
+  }
+
+  subnet_id      = aws_subnet.spoke_b_app[each.key].id
+  route_table_id = aws_route_table.spoke_b_app[each.value.vpc_key].id
+}
+
+# ─── Data Subnets – Region B ─────────────────────────────────────────────────
+
+resource "aws_subnet" "spoke_b_data" {
+  provider = aws.region_b
+  for_each = {
+    for item in flatten([
+      for vpc_key, vpc in var.spoke_vpcs_region_b : [
+        for idx, subnet_cidr in vpc.data_subnets : {
+          key        = "${vpc_key}-data-${idx}"
+          vpc_key    = vpc_key
+          cidr_block = subnet_cidr
+          az         = local.region_b_azs[idx % length(local.region_b_azs)]
+        }
+      ]
+    ]) : item.key => item
+  }
+
+  vpc_id            = aws_vpc.spoke_b[each.value.vpc_key].id
+  cidr_block        = each.value.cidr_block
+  availability_zone = each.value.az
+
+  tags = merge(var.tags, {
+    Name = each.key
+    Tier = "Private-Data"
+  })
+}
+
+resource "aws_route_table" "spoke_b_data" {
+  provider = aws.region_b
+  for_each = var.spoke_vpcs_region_b
+  vpc_id   = aws_vpc.spoke_b[each.key].id
+
+  tags = merge(var.tags, { Name = "${each.key}-data-rt" })
+}
+
+resource "aws_route" "spoke_b_data_nat" {
+  provider               = aws.region_b
+  for_each               = var.enable_nat_gateway ? var.spoke_vpcs_region_b : {}
+  route_table_id         = aws_route_table.spoke_b_data[each.key].id
+  destination_cidr_block = "0.0.0.0/0"
+  nat_gateway_id         = aws_nat_gateway.spoke_b[each.key].id
+}
+
+resource "aws_route_table_association" "spoke_b_data" {
+  provider = aws.region_b
+  for_each = {
+    for item in flatten([
+      for vpc_key, vpc in var.spoke_vpcs_region_b : [
+        for idx, subnet_cidr in vpc.data_subnets : {
+          key     = "${vpc_key}-data-${idx}"
+          vpc_key = vpc_key
+        }
+      ]
+    ]) : item.key => item
+  }
+
+  subnet_id      = aws_subnet.spoke_b_data[each.key].id
+  route_table_id = aws_route_table.spoke_b_data[each.value.vpc_key].id
+}
+
+# ─── Security Groups – Region B ──────────────────────────────────────────────
+
+resource "aws_security_group" "spoke_b_public" {
   provider    = aws.region_b
   for_each    = var.spoke_vpcs_region_b
-  name        = "${each.key}-sg"
-  description = "Allow traffic from all spokes"
+  name        = "${each.key}-public-sg"
+  description = "Public tier SG"
   vpc_id      = aws_vpc.spoke_b[each.key].id
 
   ingress {
+    description = "HTTP"
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    #trivy:ignore:aws-0107 - Lab environment
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    description = "HTTPS"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    #trivy:ignore:aws-0107 - Lab environment
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = merge(var.tags, { Name = "${each.key}-public-sg" })
+}
+
+resource "aws_security_group" "spoke_b_app" {
+  provider    = aws.region_b
+  for_each    = var.spoke_vpcs_region_b
+  name        = "${each.key}-app-sg"
+  description = "App tier SG - allows traffic from public tier and all spokes via TGW"
+  vpc_id      = aws_vpc.spoke_b[each.key].id
+
+  ingress {
+    description     = "All from public tier"
+    from_port       = 0
+    to_port         = 0
+    protocol        = "-1"
+    security_groups = [aws_security_group.spoke_b_public[each.key].id]
+  }
+
+  ingress {
+    description = "All from spoke VPCs via TGW"
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
@@ -240,17 +782,57 @@ resource "aws_security_group" "spoke_b" {
   }
 
   egress {
-    from_port = 0
-    to_port   = 0
-    protocol  = "-1"
-    #trivy:ignore:aws-0104 - Unrestricted egress required for spoke VPC connectivity testing
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = merge(var.tags, { Name = "${each.key}-sg" })
+  tags = merge(var.tags, { Name = "${each.key}-app-sg" })
 }
 
-# ─── TGW VPC Attachments – Region B ─────────────────────────────────────────
+resource "aws_security_group" "spoke_b_data" {
+  provider    = aws.region_b
+  for_each    = var.spoke_vpcs_region_b
+  name        = "${each.key}-data-sg"
+  description = "Data tier SG"
+  vpc_id      = aws_vpc.spoke_b[each.key].id
+
+  ingress {
+    description     = "MySQL from app tier"
+    from_port       = 3306
+    to_port         = 3306
+    protocol        = "tcp"
+    security_groups = [aws_security_group.spoke_b_app[each.key].id]
+  }
+
+  ingress {
+    description     = "PostgreSQL from app tier"
+    from_port       = 5432
+    to_port         = 5432
+    protocol        = "tcp"
+    security_groups = [aws_security_group.spoke_b_app[each.key].id]
+  }
+
+  ingress {
+    description     = "Redis from app tier"
+    from_port       = 6379
+    to_port         = 6379
+    protocol        = "tcp"
+    security_groups = [aws_security_group.spoke_b_app[each.key].id]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = merge(var.tags, { Name = "${each.key}-data-sg" })
+}
+
+# ─── TGW VPC Attachments – Region B (use app subnets) ────────────────────────
 
 resource "aws_ec2_transit_gateway_vpc_attachment" "spoke_b" {
   provider           = aws.region_b
@@ -258,21 +840,22 @@ resource "aws_ec2_transit_gateway_vpc_attachment" "spoke_b" {
   transit_gateway_id = aws_ec2_transit_gateway.region_b.id
   vpc_id             = aws_vpc.spoke_b[each.key].id
   subnet_ids = [
-    for k, s in aws_subnet.spoke_b : s.id
-    if startswith(k, each.key)
+    for k, s in aws_subnet.spoke_b_app : s.id
+    if startswith(k, "${each.key}-app-")
   ]
 
   tags = merge(var.tags, { Name = "${each.key}-tgw-attachment" })
 }
 
-# Routes from spoke VPCs to TGW (Region B)
-resource "aws_route" "spoke_b_to_tgw" {
+# ─── Routes to TGW – Region B (all tiers) ────────────────────────────────────
+
+resource "aws_route" "spoke_b_public_to_tgw" {
   provider = aws.region_b
   for_each = {
     for item in flatten([
       for vpc_key, vpc in var.spoke_vpcs_region_b : [
         for dest_cidr in local.all_spoke_cidrs : {
-          key       = "${vpc_key}-to-${dest_cidr}"
+          key       = "${vpc_key}-public-to-${replace(dest_cidr, "/", "-")}"
           vpc_key   = vpc_key
           dest_cidr = dest_cidr
         }
@@ -281,23 +864,60 @@ resource "aws_route" "spoke_b_to_tgw" {
     ]) : item.key => item
   }
 
-  route_table_id         = aws_route_table.spoke_b[each.value.vpc_key].id
+  route_table_id         = aws_route_table.spoke_b_public[each.value.vpc_key].id
   destination_cidr_block = each.value.dest_cidr
   transit_gateway_id     = aws_ec2_transit_gateway.region_b.id
 
   depends_on = [aws_ec2_transit_gateway_vpc_attachment.spoke_b]
 }
 
-# ─── TGW Peering (Region A <-> Region B) ────────────────────────────────────
-
-data "aws_region" "b" {
+resource "aws_route" "spoke_b_app_to_tgw" {
   provider = aws.region_b
+  for_each = {
+    for item in flatten([
+      for vpc_key, vpc in var.spoke_vpcs_region_b : [
+        for dest_cidr in local.all_spoke_cidrs : {
+          key       = "${vpc_key}-app-to-${replace(dest_cidr, "/", "-")}"
+          vpc_key   = vpc_key
+          dest_cidr = dest_cidr
+        }
+        if dest_cidr != vpc.cidr
+      ]
+    ]) : item.key => item
+  }
+
+  route_table_id         = aws_route_table.spoke_b_app[each.value.vpc_key].id
+  destination_cidr_block = each.value.dest_cidr
+  transit_gateway_id     = aws_ec2_transit_gateway.region_b.id
+
+  depends_on = [aws_ec2_transit_gateway_vpc_attachment.spoke_b]
 }
 
-# NOTE: LocalStack Pro limitation — AcceptTransitGatewayPeeringAttachment is
-# accepted but the Terraform provider's internal waiter polls indefinitely
-# because DescribeTransitGatewayPeeringAttachments never returns "available"
-# under concurrent apply. Guard with enable_cross_region_peering.
+resource "aws_route" "spoke_b_data_to_tgw" {
+  provider = aws.region_b
+  for_each = {
+    for item in flatten([
+      for vpc_key, vpc in var.spoke_vpcs_region_b : [
+        for dest_cidr in local.all_spoke_cidrs : {
+          key       = "${vpc_key}-data-to-${replace(dest_cidr, "/", "-")}"
+          vpc_key   = vpc_key
+          dest_cidr = dest_cidr
+        }
+        if dest_cidr != vpc.cidr
+      ]
+    ]) : item.key => item
+  }
+
+  route_table_id         = aws_route_table.spoke_b_data[each.value.vpc_key].id
+  destination_cidr_block = each.value.dest_cidr
+  transit_gateway_id     = aws_ec2_transit_gateway.region_b.id
+
+  depends_on = [aws_ec2_transit_gateway_vpc_attachment.spoke_b]
+}
+
+###############################################################################
+# TGW PEERING (Region A <-> Region B) – Optional
+###############################################################################
 
 resource "aws_ec2_transit_gateway_peering_attachment" "cross_region" {
   count                   = var.enable_cross_region_peering ? 1 : 0

@@ -4,7 +4,8 @@ terraform {
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = "~> 4.0"
+      # < 4.67: avoids aws_vpc refresh calling DescribeVpcClassicLink (missing on MiniStack)
+      version = ">= 4.0, < 4.67"
     }
   }
 }

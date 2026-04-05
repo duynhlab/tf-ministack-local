@@ -211,7 +211,7 @@
 | DeleteSubnet | ✅ | ✅ | v1.0.0+ | |
 | DescribeSubnets | ✅ | ✅ | v1.0.0+ | |
 | ModifySubnetAttribute | ✅ | ✅ | v1.0.0+ | |
-| CreateVpcEndpoint | ✅ | ✅ | v1.0.0+ | |
+| CreateVpcEndpoint | ✅ | ✅ | v1.0.0+ | Lab: `aws_vpc_endpoint` S3 Gateway + KMS/STS Interface in `modules/vpc-base`; private DNS / full data-plane parity may differ from real AWS—validate on your emulator. |
 | DeleteVpcEndpoints | ✅ | ✅ | v1.0.0+ | |
 | DescribeVpcEndpoints | ✅ | ✅ | v1.0.0+ | |
 | ModifyVpcEndpoint | ✅ | ✅ | v1.1.36+ | Add/remove route tables, subnets, and policy on existing VPC endpoints |

@@ -21,6 +21,121 @@ Tagging follows the same *merge-and-identify* idea as common Terraform adapted t
 
 You can extend `var.tags` at the environment level with keys such as `Team` or `CostCenter` on real AWS accounts; enable those keys in **Cost allocation tags** if you use Cost Explorer.
 
+### 1.2 Network conventions: landing zone vs spoke, VPC naming, VPC endpoints
+
+**Landing zone vs spoke.** S3 buckets, KMS keys, and organization-level policies typically live at the **account / landing-zone** layer—not inside a spoke VPC. A spoke VPC uses **VPC endpoints** and **IAM** so workloads in private subnets call AWS APIs without relying on the public internet for those calls. IAM decides *what* is allowed; endpoints steer *where* traffic goes (private AWS backbone vs NAT/IGW).
+
+**Prod lab — roles of each VPC (current layout).** The **main / ingress VPC** (`prod-main-vpc`, module `main_vpc` in Terraform) is the **primary 3-tier** entry point in `ap-southeast-1`. Peering, PrivateLink, and Transit Gateway are separate composed patterns (see architecture diagrams below).
+
+```mermaid
+flowchart TB
+  subgraph lz [Account / Landing zone]
+    S3[S3 buckets]
+    KMS[KMS keys]
+    IAM[IAM policies]
+  end
+  subgraph spoke [Spoke VPC]
+    EPs[VPC endpoints S3 KMS STS]
+    workloads[Workloads private subnets]
+  end
+  workloads --> EPs
+  EPs -->|"API calls same or cross-account"| S3
+  EPs --> KMS
+  IAM -.->|"authorizes"| workloads
+```
+
+```mermaid
+flowchart TB
+  subgraph apse1 [ap-southeast-1]
+    mainV[Main VPC prod-main-vpc]
+    peerReq[Peering requester]
+    plProv[PL provider]
+    plCons[PL consumer]
+    tgwSpokes[TGW spokes A]
+  end
+  subgraph use1 [us-east-1]
+    peerAcc[Peering accepter]
+    tgwDR[TGW spoke DR]
+  end
+  mainV -->|"ingress 3-tier"| clients[Client path]
+  peerReq <-->|"VPC peering"| peerAcc
+  plProv -.->|"PrivateLink"| plCons
+  tgwSpokes --> TGWa[TGW A]
+  tgwDR --> TGWb[TGW B]
+```
+
+**VPC naming (convention for new resources).** Wide renames in Terraform can force replacement; prefer these patterns for **new** VPCs and resources. Align CIDRs with [`subnet.csv`](./subnet.csv).
+
+| Pattern | Suggested format | Example |
+|---------|------------------|---------|
+| Main / ingress | `{env}-main-vpc` or `{env}-main-{region}` | `prod-main-vpc`, `prod-main-apse1` |
+| Peering | `{env}-peer-{side}-{region}` | `prod-peer-req-apse1`, `prod-peer-acc-use1` |
+| PrivateLink | `{env}-pl-provider` / `{env}-pl-consumer` | `prod-pl-provider`, `prod-pl-consumer` |
+| TGW spoke | `{env}-tgw-spoke-{name}` | `prod-tgw-spoke-1` (kebab-case, `prod-` prefix) |
+
+**Gateway vs Interface endpoints.** **S3 Gateway** endpoints attach to **route tables** (prefix lists toward S3 over the AWS network; traffic for that prefix does not use NAT/IGW). **KMS** and **STS Interface** endpoints use **ENIs** in subnets (here: **app** tier), a **security group** allowing **TCP 443** from the **VPC CIDR**, and `private_dns_enabled = true` so Regional API hostnames resolve to the endpoint.
+
+```mermaid
+flowchart TB
+  subgraph vpc [Single VPC e.g. main / ingress]
+    igw[Internet Gateway]
+    pub[Public subnets]
+    nat[NAT GW]
+    app[App private subnets]
+    data[Data private subnets]
+    rtApp[Route table app]
+    rtData[Route table data]
+    gwEP[S3 Gateway endpoint]
+    ifKMS[KMS Interface endpoint]
+    ifSTS[STS Interface endpoint]
+  end
+  pub --> igw
+  app --> nat
+  nat --> pub
+  rtApp --> gwEP
+  rtData --> gwEP
+  app --> ifKMS
+  app --> ifSTS
+```
+
+```mermaid
+flowchart LR
+  subgraph withoutGW [Without S3 gateway]
+    app1[App subnet] --> nat1[NAT]
+    nat1 --> igw1[IGW]
+    igw1 --> s3public[S3 public endpoint]
+  end
+  subgraph withGW [With S3 gateway]
+    app2[App subnet] --> gw2[S3 Gateway EP]
+    gw2 --> s3aws[S3 AWS network]
+  end
+```
+
+| Service | Endpoint type | Placement in this lab (`modules/vpc-base`) |
+|---------|---------------|---------------------------------------------|
+| S3 | Gateway | Route tables for **app** and **data** tiers |
+| KMS | Interface | **App** subnets; SG ingress 443 from VPC CIDR |
+| STS | Interface | **App** subnets; SG ingress 443 from VPC CIDR |
+
+**MVP scope:** Optional flags on `modules/vpc-base` are enabled for **`module.main_vpc`** (prod **`prod-main-vpc`**) in `environments/prod/terraform.tfvars`. Other prod VPCs (peering, PrivateLink, TGW spokes) and `environments/dev` keep endpoints **off** by default unless you set the same variables.
+
+### 1.3 Prod VPC inventory (names in `terraform.tfvars`)
+
+Every prod VPC has a **Name** tag you can set from the root module. **`main_vpc_name`** and **`tgw_spokes_*` map keys** were already visible in tfvars; **peering** and **PrivateLink** VPC names are now **`peering_*_vpc_name`** and **`pl_*_vpc_name`**. **Transit Gateway** resources (not spokes) use **`tgw_name_tag_region_a`** / **`tgw_name_tag_region_b`**. CIDRs stay under `*_cidr` / subnet lists / spoke maps — see [`subnet.csv`](./subnet.csv).
+
+| VPC / resource | Region | Terraform module | Variable(s) in `environments/prod` | Role |
+|----------------|--------|------------------|-----------------------------------|------|
+| `prod-main-vpc` | ap-southeast-1 | `main_vpc` (`vpc-base`) | `main_vpc_name`, `main_*` subnets | Ingress 3-tier; optional S3/KMS/STS VPC endpoints |
+| `prod-peering-requester` | ap-southeast-1 | `vpc_peering` | `peering_requester_vpc_name`, `peering_requester_*` | Peering demo — requester side |
+| `prod-peering-accepter` | us-east-1 | `vpc_peering` | `peering_accepter_vpc_name`, `peering_accepter_*` | Peering demo — accepter side |
+| `prod-pl-provider` | ap-southeast-1 | `privatelink` | `pl_provider_vpc_name`, `pl_provider_*` | PrivateLink NLB + endpoint **service** |
+| `prod-pl-consumer` | ap-southeast-1 | `privatelink` | `pl_consumer_vpc_name`, `pl_consumer_*` | PrivateLink **interface** endpoint client |
+| `prod-tgw-spoke-1`, `prod-tgw-spoke-2` | ap-southeast-1 | `transit_gateway` | Keys inside `tgw_spokes_region_a` + CIDR fields | TGW spokes (region A) |
+| `prod-tgw-spoke-dr` | us-east-1 | `transit_gateway` | Keys inside `tgw_spokes_region_b` | TGW spoke (region B) |
+| TGW (hub) | ap-southeast-1 / us-east-1 | `transit_gateway` | `tgw_name_tag_region_a`, `tgw_name_tag_region_b` | Transit Gateway **objects** (not VPCs) |
+
+**Module defaults:** If you call `modules/vpc-peering` or `modules/privatelink` without setting VPC names, older **lab-default** strings (e.g. `vpc-peering-requester`, `privatelink-provider`) still apply. **`environments/prod`** sets the **`prod-*`** names above so the console matches [`subnet.csv`](./subnet.csv) and this table.
+
 ---
 
 ## 2. Architecture Diagrams
@@ -29,10 +144,14 @@ You can extend `var.tags` at the environment level with keys such as `Team` or `
 
 Deployed across `ap-southeast-1` (Singapore) and `us-east-1` (N. Virginia) on LocalStack Pro, combining all 3 connectivity patterns with full 3-tier architecture (public/app/data) for each VPC.
 
+**Terraform mapping:** Which **`terraform.tfvars`** variable controls each VPC **Name** tag is in **§1.3** (inventory table).
+
+**Naming:** Terraform uses **`module.main_vpc`** and variables `main_*` (see `environments/prod/terraform.tfvars`). The VPC **Name** tag is **`prod-main-vpc`**. In AWS networking, **edge** still means **network edge** (where internet traffic enters); this repo’s **main** VPC is that ingress 3-tier for `ap-southeast-1`. The diagram below shows **internet ingress into `prod-main-vpc`** so it does not look orphaned among the other patterns.
+
 **VPC Summary:**
 | VPC | CIDR | Region | Pattern |
 |-----|------|--------|---------|
-| prod-edge-vpc | 10.7.0.0/16 | ap-southeast-1 | Edge/Ingress (3-tier) |
+| prod-main-vpc | 10.7.0.0/16 | ap-southeast-1 | **Main / ingress** (3-tier) |
 | prod-peering-requester | 10.0.0.0/16 | ap-southeast-1 | VPC Peering (3-tier) |
 | prod-peering-accepter | 10.1.0.0/16 | us-east-1 | VPC Peering (3-tier) |
 | prod-pl-provider | 10.2.0.0/16 | ap-southeast-1 | PrivateLink Provider (3-tier) |
@@ -42,58 +161,65 @@ Deployed across `ap-southeast-1` (Singapore) and `us-east-1` (N. Virginia) on Lo
 | prod-tgw-spoke-dr | 10.6.0.0/16 | us-east-1 | TGW DR Spoke (3-tier) |
 
 ```mermaid
-graph TD
-    subgraph sgRegion ["ap-southeast-1 (Singapore)"]
-        subgraph edgeVPC ["Edge VPC 10.7.0.0/16"]
-            EDGE_PUB["Public 10.7.1-2.0/24"]
-            EDGE_APP["App 10.7.11-12.0/24"]
-            EDGE_DATA["Data 10.7.21-22.0/24"]
+flowchart TB
+    clients["Internet / users"]
+
+    subgraph sgRegion ["ap-southeast-1 — Singapore"]
+        subgraph mainVPC ["prod-main-vpc 10.7 — PRIMARY INGRESS (main 3-tier)"]
+            EDGE_PUB["Public 10.7.1–2"]
+            EDGE_APP["App 10.7.11–12"]
+            EDGE_DATA["Data 10.7.21–22"]
         end
-        
+        clients -->|"IGW entry"| EDGE_PUB
+        EDGE_PUB --> EDGE_APP
+        EDGE_APP --> EDGE_DATA
+
         TGW_A["Transit Gateway A"]
-        
-        subgraph peerReq ["Peering Requester 10.0.0.0/16"]
+
+        subgraph peerReq ["Peering requester 10.0 — lab pattern only"]
             PR_TIERS["3-tier subnets"]
         end
-        
-        subgraph spoke1 ["TGW Spoke-1 10.4.0.0/16"]
+
+        subgraph spoke1 ["TGW spoke-1 10.4"]
             S1_TIERS["3-tier subnets"]
         end
-        
-        subgraph spoke2 ["TGW Spoke-2 10.5.0.0/16"]
+
+        subgraph spoke2 ["TGW spoke-2 10.5"]
             S2_TIERS["3-tier subnets"]
         end
-        
-        subgraph plProv ["PL Provider 10.2.0.0/16"]
+
+        subgraph plProv ["PL provider 10.2"]
             PLP_TIERS["3-tier subnets"]
         end
-        
-        subgraph plCons ["PL Consumer 10.3.0.0/16"]
+
+        subgraph plCons ["PL consumer 10.3"]
             PLC_TIERS["3-tier subnets"]
         end
-        
+
         S1_TIERS --> TGW_A
         S2_TIERS --> TGW_A
         PLP_TIERS -.->|"PrivateLink"| PLC_TIERS
     end
-    
-    subgraph usRegion ["us-east-1 (N. Virginia)"]
+
+    subgraph usRegion ["us-east-1 — N. Virginia"]
         TGW_B["Transit Gateway B"]
-        
-        subgraph peerAcc ["Peering Accepter 10.1.0.0/16"]
+
+        subgraph peerAcc ["Peering accepter 10.1"]
             PA_TIERS["3-tier subnets"]
         end
-        
-        subgraph spokeDR ["TGW Spoke-DR 10.6.0.0/16"]
+
+        subgraph spokeDR ["TGW spoke-DR 10.6"]
             SDR_TIERS["3-tier subnets"]
         end
-        
+
         SDR_TIERS --> TGW_B
     end
-    
-    PR_TIERS <-->|"VPC Peering"| PA_TIERS
-    TGW_A <-->|"TGW Peering (optional)"| TGW_B
+
+    PR_TIERS <-->|"VPC peering"| PA_TIERS
+    TGW_A <-->|"TGW peering optional"| TGW_B
 ```
+
+*The main ingress VPC is separate from peering / TGW / PrivateLink in this diagram: those links illustrate **other** connectivity patterns deployed in the same environment, not “children” of `prod-main-vpc`.*
 
 ---
 
@@ -219,7 +345,7 @@ graph TD
 
 ```mermaid
 graph LR
-    subgraph "Edge VPC"
+    subgraph "Main / ingress VPC"
         IGW[Internet Gateway]
         ALB[Application Load Balancer]
         WAF[WAF v2 Web ACL]
@@ -541,7 +667,7 @@ graph TD
 
 ```
 modules/
-├── vpc-base/              # 3-Tier standalone VPC (used by dev + prod edge)
+├── vpc-base/              # 3-Tier standalone VPC (used by dev + prod main_vpc)
 │   ├── main.tf           # VPC, IGW, NAT, 3-tier subnets, RTs, SGs
 │   ├── variables.tf
 │   └── outputs.tf

@@ -1,10 +1,23 @@
-# Edge 3-tier VPC (client -> IGW -> public/app/data)
-edge_vpc_name          = "prod-edge-vpc"
-edge_vpc_cidr          = "10.7.0.0/16"
-edge_public_subnets    = ["10.7.1.0/24", "10.7.2.0/24"]
-edge_app_subnets       = ["10.7.11.0/24", "10.7.12.0/24"]
-edge_data_subnets      = ["10.7.21.0/24", "10.7.22.0/24"]
-edge_nat_gateway_count = 2
+# Main / ingress 3-tier VPC (client -> IGW -> public/app/data)
+main_vpc_name          = "prod-main-vpc"
+main_vpc_cidr          = "10.7.0.0/16"
+main_public_subnets    = ["10.7.1.0/24", "10.7.2.0/24"]
+main_app_subnets       = ["10.7.11.0/24", "10.7.12.0/24"]
+main_data_subnets      = ["10.7.21.0/24", "10.7.22.0/24"]
+main_nat_gateway_count = 2
+
+# Main VPC — optional AWS API VPC endpoints (MVP: enabled for prod lab)
+main_enable_s3_gateway_endpoint    = true
+main_enable_kms_interface_endpoint = true
+main_enable_sts_interface_endpoint = true
+
+# VPC Name tags (prefix child resources in peering/privatelink); inventory: docs/README.md §1.3
+peering_requester_vpc_name = "prod-peering-requester"
+peering_accepter_vpc_name  = "prod-peering-accepter"
+pl_provider_vpc_name       = "prod-pl-provider"
+pl_consumer_vpc_name       = "prod-pl-consumer"
+tgw_name_tag_region_a      = "prod-tgw-ap-southeast-1"
+tgw_name_tag_region_b      = "prod-tgw-us-east-1"
 
 # Peering Module CIDRs (3-tier)
 peering_requester_cidr           = "10.0.0.0/16"

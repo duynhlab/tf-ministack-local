@@ -1,3 +1,15 @@
+variable "provider_vpc_name" {
+  description = "Provider VPC Name tag; prefix for child resource Name tags (NLB/TG keep fixed name attributes for AWS limits)"
+  type        = string
+  default     = "privatelink-provider"
+}
+
+variable "consumer_vpc_name" {
+  description = "Consumer VPC Name tag; prefix for child resource Name tags"
+  type        = string
+  default     = "privatelink-consumer"
+}
+
 variable "provider_cidr" {
   description = "CIDR block for provider VPC"
   type        = string

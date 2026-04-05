@@ -40,6 +40,18 @@ variable "spoke_vpcs_region_b" {
   }
 }
 
+variable "tgw_name_tag_region_a" {
+  description = "Name tag for the Transit Gateway in region A"
+  type        = string
+  default     = "tgw-region-a"
+}
+
+variable "tgw_name_tag_region_b" {
+  description = "Name tag for the Transit Gateway in region B"
+  type        = string
+  default     = "tgw-region-b"
+}
+
 variable "tgw_asn_region_a" {
   description = "BGP ASN for Transit Gateway in region A"
   type        = number

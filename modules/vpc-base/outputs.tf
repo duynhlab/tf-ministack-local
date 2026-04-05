@@ -57,3 +57,23 @@ output "availability_zones" {
   description = "AZs used by this VPC"
   value       = local.azs
 }
+
+output "s3_gateway_endpoint_id" {
+  description = "S3 Gateway VPC endpoint ID (if enabled)"
+  value       = length(aws_vpc_endpoint.s3) > 0 ? aws_vpc_endpoint.s3[0].id : null
+}
+
+output "kms_interface_endpoint_id" {
+  description = "KMS Interface VPC endpoint ID (if enabled)"
+  value       = length(aws_vpc_endpoint.kms) > 0 ? aws_vpc_endpoint.kms[0].id : null
+}
+
+output "sts_interface_endpoint_id" {
+  description = "STS Interface VPC endpoint ID (if enabled)"
+  value       = length(aws_vpc_endpoint.sts) > 0 ? aws_vpc_endpoint.sts[0].id : null
+}
+
+output "vpc_endpoints_security_group_id" {
+  description = "Security group for Interface VPC endpoints (if KMS or STS enabled)"
+  value       = length(aws_security_group.vpc_endpoints) > 0 ? aws_security_group.vpc_endpoints[0].id : null
+}

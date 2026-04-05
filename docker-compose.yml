@@ -2,6 +2,10 @@ services:
   ministack:
     image: nahuelnucera/ministack:latest
     container_name: ministack-vpc-lab
+    profiles:
+      - ministack
+      - dev
+      - all
     ports:
       - "4566:4566"
     environment:
@@ -18,12 +22,16 @@ services:
   localstack_pro:
     image: localstack/localstack-pro:latest
     container_name: localstack-vpc-lab
+    profiles:
+      - localstack
+      - prod
+      - all
     ports:
       - "4567:4566"
       - "4510-4559:4510-4559"
     environment:
       - LOCALSTACK_AUTH_TOKEN=${LOCALSTACK_AUTH_TOKEN}
-      - SERVICES=ec2,sts,elbv2
+      - SERVICES=ec2,sts,elbv2,wafv2
       - DEFAULT_REGION=ap-southeast-1
       - EAGER_SERVICE_LOADING=1
       - DEBUG=${DEBUG:-0}

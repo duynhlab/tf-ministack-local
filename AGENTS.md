@@ -189,6 +189,8 @@ When behavior differs from AWS:
 
 ## Linting (tflint)
 
+Run **after any Terraform change** (modules or `environments/*`) and before pushing; CI uses the same rules via `.tflint.hcl`. Fix all issues (warnings are errors for merge hygiene).
+
 ```bash
 which tflint || echo "tflint not installed"
 tflint --init

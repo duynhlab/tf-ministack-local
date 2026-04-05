@@ -55,11 +55,12 @@ resource "aws_internet_gateway" "provider" {
 # ─── Provider Public Subnets ─────────────────────────────────────────────────
 
 resource "aws_subnet" "provider_public" {
-  provider                = aws.provider_region
-  count                   = length(var.provider_public_subnets)
-  vpc_id                  = aws_vpc.provider.id
-  cidr_block              = var.provider_public_subnets[count.index]
-  availability_zone       = local.provider_azs[count.index % length(local.provider_azs)]
+  provider          = aws.provider_region
+  count             = length(var.provider_public_subnets)
+  vpc_id            = aws_vpc.provider.id
+  cidr_block        = var.provider_public_subnets[count.index]
+  availability_zone = local.provider_azs[count.index % length(local.provider_azs)]
+  #trivy:ignore:AVD-AWS-0164 - Lab public tier subnets
   map_public_ip_on_launch = true
 
   tags = merge(var.tags, {
@@ -199,7 +200,7 @@ resource "aws_security_group" "provider_public" {
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
-    #trivy:ignore:aws-0107 - Lab environment
+    #trivy:ignore:AVD-AWS-0107 - Lab environment
     cidr_blocks = ["0.0.0.0/0"]
   }
 
@@ -208,10 +209,11 @@ resource "aws_security_group" "provider_public" {
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
-    #trivy:ignore:aws-0107 - Lab environment
+    #trivy:ignore:AVD-AWS-0107 - Lab environment
     cidr_blocks = ["0.0.0.0/0"]
   }
 
+  #trivy:ignore:AVD-AWS-0104 - Lab default egress (NAT/patches)
   egress {
     from_port   = 0
     to_port     = 0
@@ -233,6 +235,7 @@ resource "aws_security_group" "provider_app" {
     from_port   = var.service_port
     to_port     = var.service_port
     protocol    = "tcp"
+    #trivy:ignore:AVD-AWS-0107 - Lab NLB / PrivateLink service port
     cidr_blocks = ["0.0.0.0/0"]
   }
 
@@ -244,6 +247,7 @@ resource "aws_security_group" "provider_app" {
     security_groups = [aws_security_group.provider_public.id]
   }
 
+  #trivy:ignore:AVD-AWS-0104 - Lab default egress (NAT/patches)
   egress {
     from_port   = 0
     to_port     = 0
@@ -284,6 +288,7 @@ resource "aws_security_group" "provider_data" {
     security_groups = [aws_security_group.provider_app.id]
   }
 
+  #trivy:ignore:AVD-AWS-0104 - Lab default egress (NAT/patches)
   egress {
     from_port   = 0
     to_port     = 0
@@ -368,11 +373,12 @@ resource "aws_internet_gateway" "consumer" {
 # ─── Consumer Public Subnets ─────────────────────────────────────────────────
 
 resource "aws_subnet" "consumer_public" {
-  provider                = aws.consumer_region
-  count                   = length(var.consumer_public_subnets)
-  vpc_id                  = aws_vpc.consumer.id
-  cidr_block              = var.consumer_public_subnets[count.index]
-  availability_zone       = local.consumer_azs[count.index % length(local.consumer_azs)]
+  provider          = aws.consumer_region
+  count             = length(var.consumer_public_subnets)
+  vpc_id            = aws_vpc.consumer.id
+  cidr_block        = var.consumer_public_subnets[count.index]
+  availability_zone = local.consumer_azs[count.index % length(local.consumer_azs)]
+  #trivy:ignore:AVD-AWS-0164 - Lab public tier subnets
   map_public_ip_on_launch = true
 
   tags = merge(var.tags, {
@@ -512,7 +518,7 @@ resource "aws_security_group" "consumer_public" {
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
-    #trivy:ignore:aws-0107 - Lab environment
+    #trivy:ignore:AVD-AWS-0107 - Lab environment
     cidr_blocks = ["0.0.0.0/0"]
   }
 
@@ -521,10 +527,11 @@ resource "aws_security_group" "consumer_public" {
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
-    #trivy:ignore:aws-0107 - Lab environment
+    #trivy:ignore:AVD-AWS-0107 - Lab environment
     cidr_blocks = ["0.0.0.0/0"]
   }
 
+  #trivy:ignore:AVD-AWS-0104 - Lab default egress (NAT/patches)
   egress {
     from_port   = 0
     to_port     = 0
@@ -549,6 +556,7 @@ resource "aws_security_group" "consumer_app" {
     security_groups = [aws_security_group.consumer_public.id]
   }
 
+  #trivy:ignore:AVD-AWS-0104 - Lab default egress (NAT/patches)
   egress {
     from_port   = 0
     to_port     = 0
@@ -589,6 +597,7 @@ resource "aws_security_group" "consumer_data" {
     security_groups = [aws_security_group.consumer_app.id]
   }
 
+  #trivy:ignore:AVD-AWS-0104 - Lab default egress (NAT/patches)
   egress {
     from_port   = 0
     to_port     = 0
@@ -614,6 +623,7 @@ resource "aws_security_group" "endpoint" {
     cidr_blocks = [var.consumer_cidr]
   }
 
+  #trivy:ignore:AVD-AWS-0104 - Lab default egress (NAT/patches)
   egress {
     from_port   = 0
     to_port     = 0

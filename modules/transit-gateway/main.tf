@@ -90,9 +90,10 @@ resource "aws_subnet" "spoke_a_public" {
     ]) : item.key => item
   }
 
-  vpc_id                  = aws_vpc.spoke_a[each.value.vpc_key].id
-  cidr_block              = each.value.cidr_block
-  availability_zone       = each.value.az
+  vpc_id            = aws_vpc.spoke_a[each.value.vpc_key].id
+  cidr_block        = each.value.cidr_block
+  availability_zone = each.value.az
+  #trivy:ignore:AVD-AWS-0164 - Lab public tier subnets
   map_public_ip_on_launch = true
 
   tags = merge(var.tags, {
@@ -295,7 +296,7 @@ resource "aws_security_group" "spoke_a_public" {
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
-    #trivy:ignore:aws-0107 - Lab environment
+    #trivy:ignore:AVD-AWS-0107 - Lab environment
     cidr_blocks = ["0.0.0.0/0"]
   }
 
@@ -304,10 +305,11 @@ resource "aws_security_group" "spoke_a_public" {
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
-    #trivy:ignore:aws-0107 - Lab environment
+    #trivy:ignore:AVD-AWS-0107 - Lab environment
     cidr_blocks = ["0.0.0.0/0"]
   }
 
+  #trivy:ignore:AVD-AWS-0104 - Lab default egress (NAT/patches)
   egress {
     from_port   = 0
     to_port     = 0
@@ -341,6 +343,7 @@ resource "aws_security_group" "spoke_a_app" {
     cidr_blocks = local.all_spoke_cidrs
   }
 
+  #trivy:ignore:AVD-AWS-0104 - Lab default egress (NAT/patches)
   egress {
     from_port   = 0
     to_port     = 0
@@ -382,6 +385,7 @@ resource "aws_security_group" "spoke_a_data" {
     security_groups = [aws_security_group.spoke_a_app[each.key].id]
   }
 
+  #trivy:ignore:AVD-AWS-0104 - Lab default egress (NAT/patches)
   egress {
     from_port   = 0
     to_port     = 0
@@ -530,9 +534,10 @@ resource "aws_subnet" "spoke_b_public" {
     ]) : item.key => item
   }
 
-  vpc_id                  = aws_vpc.spoke_b[each.value.vpc_key].id
-  cidr_block              = each.value.cidr_block
-  availability_zone       = each.value.az
+  vpc_id            = aws_vpc.spoke_b[each.value.vpc_key].id
+  cidr_block        = each.value.cidr_block
+  availability_zone = each.value.az
+  #trivy:ignore:AVD-AWS-0164 - Lab public tier subnets
   map_public_ip_on_launch = true
 
   tags = merge(var.tags, {
@@ -735,7 +740,7 @@ resource "aws_security_group" "spoke_b_public" {
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
-    #trivy:ignore:aws-0107 - Lab environment
+    #trivy:ignore:AVD-AWS-0107 - Lab environment
     cidr_blocks = ["0.0.0.0/0"]
   }
 
@@ -744,10 +749,11 @@ resource "aws_security_group" "spoke_b_public" {
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
-    #trivy:ignore:aws-0107 - Lab environment
+    #trivy:ignore:AVD-AWS-0107 - Lab environment
     cidr_blocks = ["0.0.0.0/0"]
   }
 
+  #trivy:ignore:AVD-AWS-0104 - Lab default egress (NAT/patches)
   egress {
     from_port   = 0
     to_port     = 0
@@ -781,6 +787,7 @@ resource "aws_security_group" "spoke_b_app" {
     cidr_blocks = local.all_spoke_cidrs
   }
 
+  #trivy:ignore:AVD-AWS-0104 - Lab default egress (NAT/patches)
   egress {
     from_port   = 0
     to_port     = 0
@@ -822,6 +829,7 @@ resource "aws_security_group" "spoke_b_data" {
     security_groups = [aws_security_group.spoke_b_app[each.key].id]
   }
 
+  #trivy:ignore:AVD-AWS-0104 - Lab default egress (NAT/patches)
   egress {
     from_port   = 0
     to_port     = 0

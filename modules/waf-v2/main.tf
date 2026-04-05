@@ -2,6 +2,17 @@
 # WAF v2 Module – Simple, extensible AWS WAFv2 Web ACL + IP Set
 ###############################################################################
 
+terraform {
+  required_version = ">= 1.3"
+
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = ">= 4.0, < 4.67"
+    }
+  }
+}
+
 resource "aws_wafv2_ip_set" "this" {
   name               = var.ip_set_name
   scope              = var.scope

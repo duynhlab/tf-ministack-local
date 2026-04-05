@@ -58,11 +58,12 @@ resource "aws_internet_gateway" "requester" {
 # ─── Requester Public Subnets ────────────────────────────────────────────────
 
 resource "aws_subnet" "requester_public" {
-  provider                = aws.requester
-  count                   = length(var.requester_public_subnets)
-  vpc_id                  = aws_vpc.requester.id
-  cidr_block              = var.requester_public_subnets[count.index]
-  availability_zone       = local.requester_azs[count.index % length(local.requester_azs)]
+  provider          = aws.requester
+  count             = length(var.requester_public_subnets)
+  vpc_id            = aws_vpc.requester.id
+  cidr_block        = var.requester_public_subnets[count.index]
+  availability_zone = local.requester_azs[count.index % length(local.requester_azs)]
+  #trivy:ignore:AVD-AWS-0164 - Lab public tier subnets
   map_public_ip_on_launch = true
 
   tags = merge(var.tags, {
@@ -202,7 +203,7 @@ resource "aws_security_group" "requester_public" {
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
-    #trivy:ignore:aws-0107 - Lab environment allows public HTTP
+    #trivy:ignore:AVD-AWS-0107 - Lab environment allows public HTTP
     cidr_blocks = ["0.0.0.0/0"]
   }
 
@@ -211,10 +212,11 @@ resource "aws_security_group" "requester_public" {
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
-    #trivy:ignore:aws-0107 - Lab environment allows public HTTPS
+    #trivy:ignore:AVD-AWS-0107 - Lab environment allows public HTTPS
     cidr_blocks = ["0.0.0.0/0"]
   }
 
+  #trivy:ignore:AVD-AWS-0104 - Lab default egress (NAT/patches)
   egress {
     from_port   = 0
     to_port     = 0
@@ -247,6 +249,7 @@ resource "aws_security_group" "requester_app" {
     cidr_blocks = [var.accepter_cidr]
   }
 
+  #trivy:ignore:AVD-AWS-0104 - Lab default egress (NAT/patches)
   egress {
     from_port   = 0
     to_port     = 0
@@ -287,6 +290,7 @@ resource "aws_security_group" "requester_data" {
     security_groups = [aws_security_group.requester_app.id]
   }
 
+  #trivy:ignore:AVD-AWS-0104 - Lab default egress (NAT/patches)
   egress {
     from_port   = 0
     to_port     = 0
@@ -322,11 +326,12 @@ resource "aws_internet_gateway" "accepter" {
 # ─── Accepter Public Subnets ─────────────────────────────────────────────────
 
 resource "aws_subnet" "accepter_public" {
-  provider                = aws.accepter
-  count                   = length(var.accepter_public_subnets)
-  vpc_id                  = aws_vpc.accepter.id
-  cidr_block              = var.accepter_public_subnets[count.index]
-  availability_zone       = local.accepter_azs[count.index % length(local.accepter_azs)]
+  provider          = aws.accepter
+  count             = length(var.accepter_public_subnets)
+  vpc_id            = aws_vpc.accepter.id
+  cidr_block        = var.accepter_public_subnets[count.index]
+  availability_zone = local.accepter_azs[count.index % length(local.accepter_azs)]
+  #trivy:ignore:AVD-AWS-0164 - Lab public tier subnets
   map_public_ip_on_launch = true
 
   tags = merge(var.tags, {
@@ -466,7 +471,7 @@ resource "aws_security_group" "accepter_public" {
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
-    #trivy:ignore:aws-0107 - Lab environment allows public HTTP
+    #trivy:ignore:AVD-AWS-0107 - Lab environment allows public HTTP
     cidr_blocks = ["0.0.0.0/0"]
   }
 
@@ -475,10 +480,11 @@ resource "aws_security_group" "accepter_public" {
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
-    #trivy:ignore:aws-0107 - Lab environment allows public HTTPS
+    #trivy:ignore:AVD-AWS-0107 - Lab environment allows public HTTPS
     cidr_blocks = ["0.0.0.0/0"]
   }
 
+  #trivy:ignore:AVD-AWS-0104 - Lab default egress (NAT/patches)
   egress {
     from_port   = 0
     to_port     = 0
@@ -511,6 +517,7 @@ resource "aws_security_group" "accepter_app" {
     cidr_blocks = [var.requester_cidr]
   }
 
+  #trivy:ignore:AVD-AWS-0104 - Lab default egress (NAT/patches)
   egress {
     from_port   = 0
     to_port     = 0
@@ -551,6 +558,7 @@ resource "aws_security_group" "accepter_data" {
     security_groups = [aws_security_group.accepter_app.id]
   }
 
+  #trivy:ignore:AVD-AWS-0104 - Lab default egress (NAT/patches)
   egress {
     from_port   = 0
     to_port     = 0

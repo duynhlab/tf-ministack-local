@@ -49,7 +49,7 @@ resource "aws_ec2_transit_gateway" "region_a" {
   default_route_table_propagation = "enable"
   dns_support                     = "enable"
 
-  tags = merge(local.default_tags, { Name = "tgw-region-a" })
+  tags = merge(local.default_tags, { Name = var.tgw_name_tag_region_a })
 }
 
 ###############################################################################
@@ -493,7 +493,7 @@ resource "aws_ec2_transit_gateway" "region_b" {
   default_route_table_propagation = "enable"
   dns_support                     = "enable"
 
-  tags = merge(local.default_tags, { Name = "tgw-region-b" })
+  tags = merge(local.default_tags, { Name = var.tgw_name_tag_region_b })
 }
 
 ###############################################################################

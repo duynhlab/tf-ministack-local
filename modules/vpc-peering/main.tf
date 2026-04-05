@@ -32,6 +32,9 @@ locals {
   requester_azs = ["${data.aws_region.requester.name}a", "${data.aws_region.requester.name}b"]
   accepter_azs  = ["${data.aws_region.accepter.name}a", "${data.aws_region.accepter.name}b"]
 
+  requester_prefix = var.requester_vpc_name
+  accepter_prefix  = var.accepter_vpc_name
+
   module_label = basename(abspath(path.module))
   default_tags = merge(var.tags, { TerraformModule = local.module_label })
 }
@@ -46,7 +49,7 @@ resource "aws_vpc" "requester" {
   enable_dns_support   = true
   enable_dns_hostnames = true
 
-  tags = merge(local.default_tags, { Name = "vpc-peering-requester" })
+  tags = merge(local.default_tags, { Name = var.requester_vpc_name })
 }
 
 # ─── Requester Internet Gateway ──────────────────────────────────────────────
@@ -55,7 +58,7 @@ resource "aws_internet_gateway" "requester" {
   provider = aws.requester
   vpc_id   = aws_vpc.requester.id
 
-  tags = merge(local.default_tags, { Name = "requester-igw" })
+  tags = merge(local.default_tags, { Name = "${local.requester_prefix}-igw" })
 }
 
 # ─── Requester Public Subnets ────────────────────────────────────────────────
@@ -70,7 +73,7 @@ resource "aws_subnet" "requester_public" {
   map_public_ip_on_launch = true
 
   tags = merge(local.default_tags, {
-    Name = "requester-public-${count.index}"
+    Name = "${local.requester_prefix}-public-${count.index}"
     Tier = "Public"
   })
 }
@@ -79,7 +82,7 @@ resource "aws_route_table" "requester_public" {
   provider = aws.requester
   vpc_id   = aws_vpc.requester.id
 
-  tags = merge(local.default_tags, { Name = "requester-public-rt" })
+  tags = merge(local.default_tags, { Name = "${local.requester_prefix}-public-rt" })
 }
 
 resource "aws_route" "requester_public_igw" {
@@ -103,7 +106,7 @@ resource "aws_eip" "requester_nat" {
   count    = var.enable_nat_gateway ? 1 : 0
   vpc      = true
 
-  tags = merge(local.default_tags, { Name = "requester-nat-eip" })
+  tags = merge(local.default_tags, { Name = "${local.requester_prefix}-nat-eip" })
 
   depends_on = [aws_internet_gateway.requester]
 }
@@ -114,7 +117,7 @@ resource "aws_nat_gateway" "requester" {
   allocation_id = aws_eip.requester_nat[0].id
   subnet_id     = aws_subnet.requester_public[0].id
 
-  tags = merge(local.default_tags, { Name = "requester-nat" })
+  tags = merge(local.default_tags, { Name = "${local.requester_prefix}-nat" })
 
   depends_on = [aws_internet_gateway.requester]
 }
@@ -129,7 +132,7 @@ resource "aws_subnet" "requester_app" {
   availability_zone = local.requester_azs[count.index % length(local.requester_azs)]
 
   tags = merge(local.default_tags, {
-    Name = "requester-app-${count.index}"
+    Name = "${local.requester_prefix}-app-${count.index}"
     Tier = "Private-App"
   })
 }
@@ -138,7 +141,7 @@ resource "aws_route_table" "requester_app" {
   provider = aws.requester
   vpc_id   = aws_vpc.requester.id
 
-  tags = merge(local.default_tags, { Name = "requester-app-rt" })
+  tags = merge(local.default_tags, { Name = "${local.requester_prefix}-app-rt" })
 }
 
 resource "aws_route" "requester_app_nat" {
@@ -166,7 +169,7 @@ resource "aws_subnet" "requester_data" {
   availability_zone = local.requester_azs[count.index % length(local.requester_azs)]
 
   tags = merge(local.default_tags, {
-    Name = "requester-data-${count.index}"
+    Name = "${local.requester_prefix}-data-${count.index}"
     Tier = "Private-Data"
   })
 }
@@ -175,7 +178,7 @@ resource "aws_route_table" "requester_data" {
   provider = aws.requester
   vpc_id   = aws_vpc.requester.id
 
-  tags = merge(local.default_tags, { Name = "requester-data-rt" })
+  tags = merge(local.default_tags, { Name = "${local.requester_prefix}-data-rt" })
 }
 
 resource "aws_route" "requester_data_nat" {
@@ -227,7 +230,7 @@ resource "aws_security_group" "requester_public" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = merge(local.default_tags, { Name = "peering-requester-public-sg" })
+  tags = merge(local.default_tags, { Name = "${local.requester_prefix}-public-sg" })
 }
 
 resource "aws_security_group" "requester_app" {
@@ -260,7 +263,7 @@ resource "aws_security_group" "requester_app" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = merge(local.default_tags, { Name = "peering-requester-app-sg" })
+  tags = merge(local.default_tags, { Name = "${local.requester_prefix}-app-sg" })
 }
 
 resource "aws_security_group" "requester_data" {
@@ -301,7 +304,7 @@ resource "aws_security_group" "requester_data" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = merge(local.default_tags, { Name = "peering-requester-data-sg" })
+  tags = merge(local.default_tags, { Name = "${local.requester_prefix}-data-sg" })
 }
 
 ###############################################################################
@@ -314,7 +317,7 @@ resource "aws_vpc" "accepter" {
   enable_dns_support   = true
   enable_dns_hostnames = true
 
-  tags = merge(local.default_tags, { Name = "vpc-peering-accepter" })
+  tags = merge(local.default_tags, { Name = var.accepter_vpc_name })
 }
 
 # ─── Accepter Internet Gateway ───────────────────────────────────────────────
@@ -323,7 +326,7 @@ resource "aws_internet_gateway" "accepter" {
   provider = aws.accepter
   vpc_id   = aws_vpc.accepter.id
 
-  tags = merge(local.default_tags, { Name = "accepter-igw" })
+  tags = merge(local.default_tags, { Name = "${local.accepter_prefix}-igw" })
 }
 
 # ─── Accepter Public Subnets ─────────────────────────────────────────────────
@@ -338,7 +341,7 @@ resource "aws_subnet" "accepter_public" {
   map_public_ip_on_launch = true
 
   tags = merge(local.default_tags, {
-    Name = "accepter-public-${count.index}"
+    Name = "${local.accepter_prefix}-public-${count.index}"
     Tier = "Public"
   })
 }
@@ -347,7 +350,7 @@ resource "aws_route_table" "accepter_public" {
   provider = aws.accepter
   vpc_id   = aws_vpc.accepter.id
 
-  tags = merge(local.default_tags, { Name = "accepter-public-rt" })
+  tags = merge(local.default_tags, { Name = "${local.accepter_prefix}-public-rt" })
 }
 
 resource "aws_route" "accepter_public_igw" {
@@ -371,7 +374,7 @@ resource "aws_eip" "accepter_nat" {
   count    = var.enable_nat_gateway ? 1 : 0
   vpc      = true
 
-  tags = merge(local.default_tags, { Name = "accepter-nat-eip" })
+  tags = merge(local.default_tags, { Name = "${local.accepter_prefix}-nat-eip" })
 
   depends_on = [aws_internet_gateway.accepter]
 }
@@ -382,7 +385,7 @@ resource "aws_nat_gateway" "accepter" {
   allocation_id = aws_eip.accepter_nat[0].id
   subnet_id     = aws_subnet.accepter_public[0].id
 
-  tags = merge(local.default_tags, { Name = "accepter-nat" })
+  tags = merge(local.default_tags, { Name = "${local.accepter_prefix}-nat" })
 
   depends_on = [aws_internet_gateway.accepter]
 }
@@ -397,7 +400,7 @@ resource "aws_subnet" "accepter_app" {
   availability_zone = local.accepter_azs[count.index % length(local.accepter_azs)]
 
   tags = merge(local.default_tags, {
-    Name = "accepter-app-${count.index}"
+    Name = "${local.accepter_prefix}-app-${count.index}"
     Tier = "Private-App"
   })
 }
@@ -406,7 +409,7 @@ resource "aws_route_table" "accepter_app" {
   provider = aws.accepter
   vpc_id   = aws_vpc.accepter.id
 
-  tags = merge(local.default_tags, { Name = "accepter-app-rt" })
+  tags = merge(local.default_tags, { Name = "${local.accepter_prefix}-app-rt" })
 }
 
 resource "aws_route" "accepter_app_nat" {
@@ -434,7 +437,7 @@ resource "aws_subnet" "accepter_data" {
   availability_zone = local.accepter_azs[count.index % length(local.accepter_azs)]
 
   tags = merge(local.default_tags, {
-    Name = "accepter-data-${count.index}"
+    Name = "${local.accepter_prefix}-data-${count.index}"
     Tier = "Private-Data"
   })
 }
@@ -443,7 +446,7 @@ resource "aws_route_table" "accepter_data" {
   provider = aws.accepter
   vpc_id   = aws_vpc.accepter.id
 
-  tags = merge(local.default_tags, { Name = "accepter-data-rt" })
+  tags = merge(local.default_tags, { Name = "${local.accepter_prefix}-data-rt" })
 }
 
 resource "aws_route" "accepter_data_nat" {
@@ -495,7 +498,7 @@ resource "aws_security_group" "accepter_public" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = merge(local.default_tags, { Name = "peering-accepter-public-sg" })
+  tags = merge(local.default_tags, { Name = "${local.accepter_prefix}-public-sg" })
 }
 
 resource "aws_security_group" "accepter_app" {
@@ -528,7 +531,7 @@ resource "aws_security_group" "accepter_app" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = merge(local.default_tags, { Name = "peering-accepter-app-sg" })
+  tags = merge(local.default_tags, { Name = "${local.accepter_prefix}-app-sg" })
 }
 
 resource "aws_security_group" "accepter_data" {
@@ -569,7 +572,7 @@ resource "aws_security_group" "accepter_data" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = merge(local.default_tags, { Name = "peering-accepter-data-sg" })
+  tags = merge(local.default_tags, { Name = "${local.accepter_prefix}-data-sg" })
 }
 
 ###############################################################################
@@ -583,7 +586,7 @@ resource "aws_vpc_peering_connection" "this" {
   peer_region = data.aws_region.accepter.name
   auto_accept = false
 
-  tags = merge(local.default_tags, { Name = "cross-region-peering" })
+  tags = merge(local.default_tags, { Name = "${local.requester_prefix}-peering" })
 }
 
 resource "aws_vpc_peering_connection_accepter" "this" {
@@ -591,7 +594,7 @@ resource "aws_vpc_peering_connection_accepter" "this" {
   vpc_peering_connection_id = aws_vpc_peering_connection.this.id
   auto_accept               = true
 
-  tags = merge(local.default_tags, { Name = "cross-region-peering-accepter" })
+  tags = merge(local.default_tags, { Name = "${local.accepter_prefix}-peering-accepter" })
 }
 
 ###############################################################################

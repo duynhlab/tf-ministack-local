@@ -1,3 +1,15 @@
+variable "requester_vpc_name" {
+  description = "Requester VPC Name tag; also used as prefix for child resource Name tags"
+  type        = string
+  default     = "vpc-peering-requester"
+}
+
+variable "accepter_vpc_name" {
+  description = "Accepter VPC Name tag; also used as prefix for child resource Name tags"
+  type        = string
+  default     = "vpc-peering-accepter"
+}
+
 variable "requester_cidr" {
   description = "CIDR block for requester VPC"
   type        = string

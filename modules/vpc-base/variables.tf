@@ -34,3 +34,21 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+variable "enable_s3_gateway_endpoint" {
+  description = "Create S3 Gateway VPC endpoint and associate app/data route tables (reduces NAT use for S3 prefix)"
+  type        = bool
+  default     = false
+}
+
+variable "enable_kms_interface_endpoint" {
+  description = "Create KMS Interface VPC endpoint in app subnets (private API access)"
+  type        = bool
+  default     = false
+}
+
+variable "enable_sts_interface_endpoint" {
+  description = "Create STS Interface VPC endpoint in app subnets (AssumeRole/GetCallerIdentity without public STS)"
+  type        = bool
+  default     = false
+}

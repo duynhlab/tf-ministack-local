@@ -13,7 +13,7 @@ Terraform lab for **enterprise-style AWS networking** using two emulators:
 | `environments/dev` | MiniStack | `http://localhost:4566` |
 | `environments/prod` | LocalStack Pro | `http://localhost:4567` |
 
-`prod` is the main multi-pattern scenario: VPC peering, PrivateLink, Transit Gateway hub–spoke, 3-tier edge VPC (IGW → public / app / data).
+`prod` is the main multi-pattern scenario: VPC peering, PrivateLink, Transit Gateway hub–spoke, 3-tier **main / ingress** VPC (`module.main_vpc`, IGW → public / app / data).
 
 ---
 
@@ -51,7 +51,7 @@ modules/
 ```
 
 - Each `environments/*` directory is a **standalone** Terraform root module.
-- `prod/` composes `vpc-peering`, `privatelink`, `transit-gateway`, plus edge VPC and optional WAF.
+- `prod/` composes `vpc-peering`, `privatelink`, `transit-gateway`, plus **`main_vpc`** (ingress 3-tier) and optional WAF.
 
 ---
 
@@ -159,6 +159,15 @@ Do not add new providers or external modules without a clear request.
 - **IAM**: `aws_iam_role` + `aws_iam_role_policy_attachment`; policies via `data "aws_iam_policy_document"`.
 - **VPC**: Always align CIDRs with `docs/subnet.csv`.
 
+### VPC naming and AWS VPC endpoints (`vpc-base`)
+
+- **Prod VPC names in tfvars**: Peering and PrivateLink VPC **Name** tags come from **`peering_*_vpc_name`** and **`pl_*_vpc_name`** in `environments/prod` (defaults align with `docs/subnet.csv`). TGW hub **Name** tags use **`tgw_name_tag_region_*`**; spoke VPC names remain **map keys** in `tgw_spokes_region_*`. Inventory table: [docs/README.md](docs/README.md) **§1.3**.
+- **Naming and diagrams**: Use [docs/README.md](docs/README.md) — **§1.2 *Network conventions*** for landing zone vs spoke, VPC naming table, and Gateway vs Interface endpoint diagrams. Renaming existing VPCs in Terraform can force replacement; use the conventions for **new** resources or planned migrations.
+- **Endpoints in code**: `modules/vpc-base` exposes optional flags: **S3 Gateway** (app + data route tables), **KMS** and **STS Interface** (app subnets, dedicated SG for TCP 443 from the VPC CIDR, `private_dns_enabled = true`). **Gateway** = route-table–based; **Interface** = ENI in subnets.
+- **Emulators**: EC2 VPC endpoint APIs are listed under **EC2 — VPC & Subnets** in [docs/support.md](docs/support.md). If you add another service endpoint and hit a gap, document it in `support.md` and add a short `# NOTE: Emulator limitation` on the resource.
+- **Tagging**: New endpoint and SG resources must use `merge(local.default_tags, { Name = ... })` like other `vpc-base` resources (see **Resource tagging (AWS)** below).
+- **Conventions drift**: When you introduce new lab-wide naming or endpoint rules, update **this file** and the long-form **README §1.2** together so agents and humans have one checklist and one narrative.
+
 ---
 
 ## Emulation compatibility (summary)
@@ -224,6 +233,7 @@ If the target (`dev` vs `prod`) is unclear, ask one short question before coding
 
 ## Docs
 
+- [docs/README.md](docs/README.md) — includes **§1.1** (tagging), **§1.2** (landing zone vs spoke, endpoints), **§1.3** (prod VPC inventory / tfvars map)
 - [docs/support.md](docs/support.md) — API coverage matrix and workarounds
 - [docs/changelog.md](docs/changelog.md)
 - [docs/report.md](docs/report.md)

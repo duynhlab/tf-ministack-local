@@ -22,6 +22,8 @@ data "aws_availability_zones" "available" {
   state = "available"
 }
 
+data "aws_region" "current" {}
+
 locals {
   azs = slice(data.aws_availability_zones.available.names, 0, length(var.public_subnets))
 
@@ -185,4 +187,70 @@ resource "aws_security_group" "default" {
   }
 
   tags = merge(local.default_tags, { Name = "${var.vpc_name}-default-sg" })
+}
+
+# ─── Optional VPC endpoints (S3 Gateway; KMS / STS Interface) ───────────────
+# NOTE: Emulator coverage varies — see docs/support.md. MVP: enable on prod `module.main_vpc`.
+
+resource "aws_security_group" "vpc_endpoints" {
+  count = (var.enable_kms_interface_endpoint || var.enable_sts_interface_endpoint) ? 1 : 0
+
+  name        = "${var.vpc_name}-vpce-sg"
+  description = "HTTPS from VPC CIDR to Interface VPC endpoints (KMS/STS)"
+  vpc_id      = aws_vpc.this.id
+
+  ingress {
+    description = "HTTPS from VPC"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = [var.vpc_cidr]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "Allow endpoint to reach AWS APIs"
+  }
+
+  tags = merge(local.default_tags, { Name = "${var.vpc_name}-vpce-sg" })
+}
+
+resource "aws_vpc_endpoint" "s3" {
+  count = var.enable_s3_gateway_endpoint ? 1 : 0
+
+  vpc_id            = aws_vpc.this.id
+  service_name      = "com.amazonaws.${data.aws_region.current.name}.s3"
+  vpc_endpoint_type = "Gateway"
+  route_table_ids   = concat(aws_route_table.app[*].id, aws_route_table.data[*].id)
+
+  tags = merge(local.default_tags, { Name = "${var.vpc_name}-s3-gw" })
+}
+
+resource "aws_vpc_endpoint" "kms" {
+  count = var.enable_kms_interface_endpoint ? 1 : 0
+
+  vpc_id              = aws_vpc.this.id
+  service_name        = "com.amazonaws.${data.aws_region.current.name}.kms"
+  vpc_endpoint_type   = "Interface"
+  subnet_ids          = aws_subnet.app[*].id
+  security_group_ids  = [aws_security_group.vpc_endpoints[0].id]
+  private_dns_enabled = true
+
+  tags = merge(local.default_tags, { Name = "${var.vpc_name}-kms-if" })
+}
+
+resource "aws_vpc_endpoint" "sts" {
+  count = var.enable_sts_interface_endpoint ? 1 : 0
+
+  vpc_id              = aws_vpc.this.id
+  service_name        = "com.amazonaws.${data.aws_region.current.name}.sts"
+  vpc_endpoint_type   = "Interface"
+  subnet_ids          = aws_subnet.app[*].id
+  security_group_ids  = [aws_security_group.vpc_endpoints[0].id]
+  private_dns_enabled = true
+
+  tags = merge(local.default_tags, { Name = "${var.vpc_name}-sts-if" })
 }

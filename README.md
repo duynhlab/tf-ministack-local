@@ -86,6 +86,9 @@ terraform destroy -auto-approve
 ├── environments/
 │   ├── dev/                        # MiniStack dev (Singapore, 3 AZs)
 │   └── prod/                       # MiniStack prod (Multi-region: SG, US-East)
+├── iam/                            # IAM case study: cross-account SNS → SQS + IRSA
+│   ├── stg/                        # Staging (1 SNS → 1 SQS, cross-region)
+│   └── prod/                       # Production (1 SNS → 2 SQS fan-out, multi-region)
 ├── scripts/
 │   ├── setup.sh                    # Start MiniStack (podman/docker)
 │   ├── teardown.sh                 # Stop MiniStack and cleanup

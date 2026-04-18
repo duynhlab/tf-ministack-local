@@ -90,6 +90,32 @@ This document lists the AWS APIs used by this lab and their MiniStack support st
 
 ---
 
+## SNS
+
+| Operation | MiniStack | Notes |
+|---|---|---|
+| CreateTopic / DeleteTopic / ListTopics / GetTopicAttributes / SetTopicAttributes | ✅ | |
+| Subscribe / Unsubscribe / ListSubscriptions / ListSubscriptionsByTopic | ✅ | |
+| ConfirmSubscription / GetSubscriptionAttributes / SetSubscriptionAttributes | ✅ | |
+| Publish / PublishBatch | ✅ | |
+| TagResource / UntagResource / ListTagsForResource | ✅ | |
+| Cross-account topic policy | ⚠️ | Policy stored but not enforced |
+
+---
+
+## SQS
+
+| Operation | MiniStack | Notes |
+|---|---|---|
+| CreateQueue / DeleteQueue / ListQueues / GetQueueUrl / GetQueueAttributes / SetQueueAttributes | ✅ | DeleteQueue can be slow (~2 min) |
+| SendMessage / SendMessageBatch / ReceiveMessage / DeleteMessage / DeleteMessageBatch | ✅ | |
+| ChangeMessageVisibility / ChangeMessageVisibilityBatch / PurgeQueue | ✅ | |
+| TagQueue / UntagQueue / ListQueueTags | ✅ | |
+| Redrive policy (DLQ) | ✅ | `maxReceiveCount` + `deadLetterTargetArn` |
+| Queue policy (resource-based) | ⚠️ | Policy stored but not enforced |
+
+---
+
 ## EC2 — Instances & Images
 
 | Operation | MiniStack | Notes |

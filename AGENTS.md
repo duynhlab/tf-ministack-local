@@ -42,6 +42,9 @@ docs/
 environments/
   dev/                     # MiniStack, ap-southeast-1, :4566
   prod/                    # MiniStack, multi-region, :4566
+iam/
+  stg/                     # Cross-account SNS→SQS + IRSA (staging)
+  prod/                    # Cross-account SNS→SQS fan-out + IRSA (prod)
 modules/
   vpc-base/
   vpc-peering/

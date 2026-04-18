@@ -31,6 +31,8 @@ jobs:
         environment:
           - environments/dev
           - environments/prod
+          - iam/stg
+          - iam/prod
     steps:
       - uses: actions/checkout@v6
 
@@ -59,6 +61,8 @@ jobs:
           - modules/waf-v2
           - environments/dev
           - environments/prod
+          - iam/stg
+          - iam/prod
     steps:
       - uses: actions/checkout@v6
 
@@ -136,6 +140,28 @@ jobs:
         run: |
           cd environments/dev
           echo "=== MiniStack: Dev Environment ==="
+          terraform fmt -check
+          terraform init -input=false
+          terraform validate
+          terraform apply -auto-approve
+          terraform output
+          terraform destroy -auto-approve
+
+      - name: Test IAM Staging
+        run: |
+          cd iam/stg
+          echo "=== MiniStack: IAM Staging ==="
+          terraform fmt -check
+          terraform init -input=false
+          terraform validate
+          terraform apply -auto-approve
+          terraform output
+          terraform destroy -auto-approve
+
+      - name: Test IAM Production
+        run: |
+          cd iam/prod
+          echo "=== MiniStack: IAM Production ==="
           terraform fmt -check
           terraform init -input=false
           terraform validate

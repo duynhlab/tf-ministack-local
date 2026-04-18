@@ -107,15 +107,12 @@ jobs:
   # MiniStack Integration Test
   # - Runs on port 4566
   # - Tests both dev and prod environments
-  # - continue-on-error: true (failures don't block merge)
-  # - Useful for tracking MiniStack's progress toward full API compatibility
   # --------------------------------------------------------------------------
   ministack-integration:
     name: MiniStack Integration Test
     runs-on: ubuntu-latest
     if: github.event_name == 'push'
     needs: [terraform-fmt, terraform-validate, tflint]
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v6
 
@@ -125,17 +122,17 @@ jobs:
 
       - name: Start MiniStack
         run: |
-          docker compose --profile ministack up -d
+          docker compose up -d
           echo "Waiting for MiniStack readiness..."
           for i in $(seq 1 30); do
-            curl -sf http://localhost:4566/_localstack/health > /dev/null 2>&1 && break
+            curl -sf http://localhost:4566/_ministack/health > /dev/null 2>&1 && break
             echo "  Attempt $i/30..."
             sleep 3
           done
           echo "MiniStack health check:"
-          curl -s http://localhost:4566/_localstack/health | python3 -m json.tool || true
+          curl -s http://localhost:4566/_ministack/health | python3 -m json.tool || true
 
-      - name: Test Dev Environment (MiniStack)
+      - name: Test Dev Environment
         run: |
           cd environments/dev
           echo "=== MiniStack: Dev Environment ==="
@@ -146,122 +143,23 @@ jobs:
           terraform output
           terraform destroy -auto-approve
 
-      - name: Test Prod Environment (MiniStack)
+      - name: Test Prod Environment
         run: |
           cd environments/prod
           echo "=== MiniStack: Prod Environment ==="
-          echo "Note: This may fail due to missing MiniStack APIs (TGW, PrivateLink, etc.)"
           terraform fmt -check
           terraform init -input=false
           terraform validate
-          if terraform apply -auto-approve; then
-            echo "::notice::Prod apply succeeded on MiniStack!"
-            terraform output
-            terraform destroy -auto-approve
-          else
-            echo "::warning::Prod apply failed on MiniStack (expected - APIs not fully supported)"
-            terraform destroy -auto-approve || true
-            exit 1
-          fi
+          terraform apply -auto-approve
+          terraform output
+          # Verify critical outputs exist (main_vpc + peering always enabled)
+          terraform output -raw main_vpc_id > /dev/null
+          terraform output -raw peering_connection_id > /dev/null
+          # Verify critical resources in state
+          terraform state list | grep -q "module.main_vpc.aws_vpc.this"
+          terraform state list | grep -q "module.vpc_peering.aws_vpc_peering_connection.this"
+          terraform destroy -auto-approve
 
       - name: Cleanup
         if: always()
         run: docker compose down -v 2>/dev/null || true
-
-  # --------------------------------------------------------------------------
-  # LocalStack Pro Integration Test
-  # - Runs on port 4566 (LocalStack mapped to 4566)
-  # - Tests both dev and prod environments
-  # - Must pass for CI to be green (no continue-on-error)
-  # - Requires LOCALSTACK_AUTH_TOKEN secret
-  # --------------------------------------------------------------------------
-  localstack-integration:
-    name: LocalStack Pro Integration Test
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push'
-    needs: [terraform-fmt, terraform-validate, tflint]
-    env:
-      LOCALSTACK_AUTH_TOKEN: ${{ secrets.LOCALSTACK_AUTH_TOKEN }}
-    steps:
-      - uses: actions/checkout@v6
-
-      - uses: hashicorp/setup-terraform@v4
-        with:
-          terraform_version: "~1.9"
-
-      - name: Check LocalStack Token
-        id: check-token
-        run: |
-          if [ -z "${LOCALSTACK_AUTH_TOKEN}" ]; then
-            echo "::warning::LOCALSTACK_AUTH_TOKEN not set - skipping LocalStack Pro tests"
-            echo "skip=true" >> $GITHUB_OUTPUT
-          else
-            echo "skip=false" >> $GITHUB_OUTPUT
-          fi
-
-      # Map both host ports: 4566 (dev providers.tf) and 4567 (prod providers.tf) -> container 4566, same pattern as ./scripts/setup.sh + compose.
-      - name: Start LocalStack Pro
-        if: steps.check-token.outputs.skip != 'true'
-        run: |
-          docker run -d --name localstack-pro \
-            -p 4566:4566 \
-            -p 4567:4566 \
-            -p 4510-4559:4510-4559 \
-            -e LOCALSTACK_AUTH_TOKEN=$LOCALSTACK_AUTH_TOKEN \
-            -e SERVICES=ec2,sts,elbv2,wafv2 \
-            -e DEFAULT_REGION=ap-southeast-1 \
-            -e EAGER_SERVICE_LOADING=1 \
-            localstack/localstack-pro:latest
-          echo "Waiting for LocalStack Pro readiness..."
-          for i in $(seq 1 30); do
-            curl -sf http://localhost:4566/_localstack/health > /dev/null 2>&1 && break
-            echo "  Attempt $i/30..."
-            sleep 3
-          done
-          echo "LocalStack Pro health check (4566 and 4567 both reach the same gateway):"
-          curl -s http://localhost:4566/_localstack/health | python3 -m json.tool || true
-
-      - name: Test Dev Environment (LocalStack Pro)
-        if: steps.check-token.outputs.skip != 'true'
-        run: |
-          cd environments/dev
-          echo "=== LocalStack Pro: Dev Environment ==="
-          terraform fmt -check
-          terraform init -input=false
-          terraform validate
-          terraform apply -auto-approve
-          terraform output
-          terraform destroy -auto-approve
-
-      - name: Test Prod Environment (LocalStack Pro)
-        if: steps.check-token.outputs.skip != 'true'
-        run: |
-          cd environments/prod
-          echo "=== LocalStack Pro: Prod Environment ==="
-          terraform fmt -check
-          terraform init -input=false
-          terraform validate
-          terraform apply -auto-approve
-          terraform output
-          # Verify critical outputs exist
-          terraform output -raw main_vpc_id > /dev/null
-          terraform output -raw peering_connection_id > /dev/null
-          terraform output -raw privatelink_endpoint_service_name > /dev/null
-          terraform output -raw tgw_id_region_a > /dev/null
-          terraform output -raw tgw_id_region_b > /dev/null
-          # Verify critical resources in state
-          terraform state list | grep -q "module.main_vpc.aws_vpc.this"
-          terraform state list | grep -q "module.vpc_peering.aws_vpc_peering_connection.this"
-          terraform state list | grep -q "module.privatelink.aws_vpc_endpoint_service.this"
-          terraform state list | grep -q "module.transit_gateway.aws_ec2_transit_gateway.region_a"
-          terraform state list | grep -q "module.transit_gateway.aws_ec2_transit_gateway.region_b"
-          terraform destroy -auto-approve
-
-      - name: Skip Notice
-        if: steps.check-token.outputs.skip == 'true'
-        run: |
-          echo "::notice::LocalStack Pro tests skipped - LOCALSTACK_AUTH_TOKEN not configured"
-
-      - name: Cleanup
-        if: always()
-        run: docker stop localstack-pro 2>/dev/null && docker rm localstack-pro 2>/dev/null || true

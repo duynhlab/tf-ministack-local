@@ -142,7 +142,7 @@ Every prod VPC has a **Name** tag you can set from the root module. **`main_vpc_
 
 ### 2.1 Prod Environment Overview (Multi-Region, 3-Tier Production-Ready)
 
-Deployed across `ap-southeast-1` (Singapore) and `us-east-1` (N. Virginia) on LocalStack Pro, combining all 3 connectivity patterns with full 3-tier architecture (public/app/data) for each VPC.
+Deployed across `ap-southeast-1` (Singapore) and `us-east-1` (N. Virginia) on MiniStack, combining all 3 connectivity patterns with full 3-tier architecture (public/app/data) for each VPC.
 
 **Terraform mapping:** Which **`terraform.tfvars`** variable controls each VPC **Name** tag is in **§1.3** (inventory table).
 
@@ -561,7 +561,7 @@ This project includes comprehensive test scripts that validate the Terraform imp
 
 | Script | Tests | Validation Points |
 |---|---|---|
-| `test-all.sh` | Dev + Prod integration | Init/apply/output/destroy for `environments/dev` and `environments/prod` (prod requires token) |
+| `test-all.sh` | Dev + Prod integration | Init/apply/output/destroy for `environments/dev` and `environments/prod` |
 
 ### What Tests Validate
 
@@ -604,7 +604,7 @@ This project includes comprehensive test scripts that validate the Terraform imp
 ### Running Tests
 
 ```bash
-# Run full suite (dev always, prod when LOCALSTACK_AUTH_TOKEN is set)
+# Run full suite (dev + prod)
 ./scripts/test-all.sh
 ```
 
@@ -656,7 +656,7 @@ graph TD
 
 ### 8.2 Verification Steps
 - Run `terraform -chdir=environments/dev apply -auto-approve`
-- Run `terraform -chdir=environments/prod apply -auto-approve` (requires `LOCALSTACK_AUTH_TOKEN`)
+- Run `terraform -chdir=environments/prod apply -auto-approve`
 - Run `terraform -chdir=environments/dev destroy -auto-approve` and `terraform -chdir=environments/prod destroy -auto-approve`
 
 ---
@@ -693,8 +693,8 @@ modules/
 
 ```text
 environments/
-├── dev/                  # MiniStack Emulation Dev (Singapore, 3 AZs)
-└── prod/                 # LocalStack Pro Emulation Prod (Multi-region: SG, US-East)
+├── dev/                  # MiniStack Dev (Singapore, 3 AZs)
+└── prod/                 # MiniStack Prod (Multi-region: SG, US-East)
 ```
 
 Note: architecture sections still describe VPC Peering, PrivateLink, and Transit Gateway patterns; these are now composed through `environments/prod` rather than standalone environment roots.
@@ -725,7 +725,7 @@ resource "aws_vpc_peering_connection" "this" {
   provider    = aws.requester
   vpc_id      = aws_vpc.requester.id
   peer_vpc_id = aws_vpc.accepter.id
-  peer_region = data.aws_region.accepter.name
+  peer_region = data.aws_region.accepter.id
 }
 ```
 

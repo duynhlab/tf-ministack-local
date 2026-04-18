@@ -1,11 +1,7 @@
 services:
   ministack:
-    image: nahuelnucera/ministack:latest
+    image: ministackorg/ministack:latest
     container_name: ministack-vpc-lab
-    profiles:
-      - ministack
-      - dev
-      - all
     ports:
       - "4566:4566"
     environment:
@@ -14,32 +10,7 @@ services:
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-
-  localstack_pro:
-    image: localstack/localstack-pro:latest
-    container_name: localstack-vpc-lab
-    profiles:
-      - localstack
-      - prod
-      - all
-    ports:
-      - "4567:4566"
-      - "4510-4559:4510-4559"
-    environment:
-      - LOCALSTACK_AUTH_TOKEN=${LOCALSTACK_AUTH_TOKEN}
-      - SERVICES=ec2,sts,elbv2,wafv2
-      - DEFAULT_REGION=ap-southeast-1
-      - EAGER_SERVICE_LOADING=1
-      - DEBUG=${DEBUG:-0}
-    volumes:
-      - "./volume:/var/lib/localstack"
-      - "/var/run/docker.sock:/var/run/docker.sock"
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:4566/_ministack/health')"]
       interval: 10s
       timeout: 5s
       retries: 10

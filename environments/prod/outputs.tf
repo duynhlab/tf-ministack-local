@@ -51,29 +51,29 @@ output "peering_connection_id" {
 }
 
 output "privatelink_provider_vpc_id" {
-  value = module.privatelink.provider_vpc_id
+  value = var.enable_privatelink ? module.privatelink[0].provider_vpc_id : null
 }
 
 output "privatelink_consumer_vpc_id" {
-  value = module.privatelink.consumer_vpc_id
+  value = var.enable_privatelink ? module.privatelink[0].consumer_vpc_id : null
 }
 
 output "privatelink_endpoint_service_name" {
-  value = module.privatelink.endpoint_service_name
+  value = var.enable_privatelink ? module.privatelink[0].endpoint_service_name : null
 }
 
 output "tgw_id_region_a" {
-  value = module.transit_gateway.tgw_id_region_a
+  value = var.enable_transit_gateway ? module.transit_gateway[0].tgw_id_region_a : null
 }
 
 output "tgw_id_region_b" {
-  value = module.transit_gateway.tgw_id_region_b
+  value = var.enable_transit_gateway ? module.transit_gateway[0].tgw_id_region_b : null
 }
 
 output "tgw_spoke_vpc_ids_a" {
-  value = module.transit_gateway.spoke_vpc_ids_a
+  value = var.enable_transit_gateway ? module.transit_gateway[0].spoke_vpc_ids_a : null
 }
 
 output "tgw_spoke_vpc_ids_b" {
-  value = module.transit_gateway.spoke_vpc_ids_b
+  value = var.enable_transit_gateway ? module.transit_gateway[0].spoke_vpc_ids_b : null
 }

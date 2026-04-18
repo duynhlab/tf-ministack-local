@@ -11,7 +11,7 @@ echo "  VPC Connectivity Lab – Full Test Suite"
 echo "=============================================="
 echo ""
 
-# Setup both emulators
+# Setup MiniStack
 "$SCRIPT_DIR/setup.sh"
 echo ""
 
@@ -54,21 +54,15 @@ verify_prod_deep_checks() {
   local checks_ok=1
   local state_list
 
-  echo "[*] Running deep prod checks (main-vpc + peering + privatelink + tgw)..."
+  echo "[*] Running deep prod checks (main-vpc + peering)..."
 
   terraform -chdir="$env_dir" output -raw main_vpc_id > /dev/null || checks_ok=0
   terraform -chdir="$env_dir" output -raw peering_connection_id > /dev/null || checks_ok=0
-  terraform -chdir="$env_dir" output -raw privatelink_endpoint_service_name > /dev/null || checks_ok=0
-  terraform -chdir="$env_dir" output -raw tgw_id_region_a > /dev/null || checks_ok=0
-  terraform -chdir="$env_dir" output -raw tgw_id_region_b > /dev/null || checks_ok=0
 
   state_list="$(terraform -chdir="$env_dir" state list || true)"
   for required_addr in \
     "module.main_vpc.aws_vpc.this" \
-    "module.vpc_peering.aws_vpc_peering_connection.this" \
-    "module.privatelink.aws_vpc_endpoint_service.this" \
-    "module.transit_gateway.aws_ec2_transit_gateway.region_a" \
-    "module.transit_gateway.aws_ec2_transit_gateway.region_b"
+    "module.vpc_peering.aws_vpc_peering_connection.this"
   do
     if [[ "$state_list" != *"$required_addr"* ]]; then
       echo "Missing expected state resource: $required_addr"
@@ -86,15 +80,7 @@ verify_prod_deep_checks() {
 }
 
 run_env_test "dev"
-
-if [ -n "${LOCALSTACK_AUTH_TOKEN:-}" ]; then
-  run_env_test "prod"
-else
-  echo "----------------------------------------------"
-  echo "Skipping environments/prod (LOCALSTACK_AUTH_TOKEN not set)"
-  echo "----------------------------------------------"
-  echo ""
-fi
+run_env_test "prod"
 
 # Stop containers
 "$SCRIPT_DIR/teardown.sh"

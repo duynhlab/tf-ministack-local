@@ -69,6 +69,6 @@ variable "tags" {
   type        = map(string)
   default = {
     Project     = "vpc-connectivity-lab"
-    Environment = "localstack"
+    Environment = "ministack"
   }
 }

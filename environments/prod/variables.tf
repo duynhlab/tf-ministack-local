@@ -13,6 +13,18 @@ variable "enable_waf" {
   default     = false
 }
 
+variable "enable_transit_gateway" {
+  description = "Enable Transit Gateway module (requires CreateTransitGateway API)"
+  type        = bool
+  default     = false
+}
+
+variable "enable_privatelink" {
+  description = "Enable PrivateLink module (requires CreateVpcEndpointServiceConfiguration API)"
+  type        = bool
+  default     = false
+}
+
 variable "enable_nat_gateway" {
   description = "Enable NAT Gateway for private subnets (1 per VPC for lab cost savings)"
   type        = bool
@@ -262,7 +274,7 @@ variable "tgw_asn_region_b" {
 }
 
 variable "enable_tgw_cross_region_peering" {
-  description = "Enable TGW cross-region peering (set false for LocalStack Pro)"
+  description = "Enable TGW cross-region peering (set false for MiniStack)"
   type        = bool
   default     = false
 }

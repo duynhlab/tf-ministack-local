@@ -3,9 +3,8 @@ terraform {
 
   required_providers {
     aws = {
-      source = "hashicorp/aws"
-      # < 4.67: avoids aws_vpc refresh calling DescribeVpcClassicLink (missing on MiniStack)
-      version = ">= 4.0, < 4.67"
+      source  = "hashicorp/aws"
+      version = ">= 6.0"
     }
   }
 }
@@ -21,8 +20,13 @@ provider "aws" {
   s3_use_path_style           = true
 
   endpoints {
-    ec2 = "http://localhost:4566"
-    sts = "http://localhost:4566"
+    ec2   = "http://localhost:4566"
+    iam   = "http://localhost:4566"
+    s3    = "http://localhost:4566"
+    sts   = "http://localhost:4566"
+    elbv2 = "http://localhost:4566"
+    wafv2 = "http://localhost:4566"
+    kms   = "http://localhost:4566"
   }
 
   default_tags {

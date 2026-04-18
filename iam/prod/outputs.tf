@@ -8,6 +8,11 @@ output "sns_topic_arn" {
   value       = aws_sns_topic.events.arn
 }
 
+output "sns_kms_key_arn" {
+  description = "KMS CMK ARN for SNS topic encryption"
+  value       = aws_kms_key.sns.arn
+}
+
 # --- Produs (us-west-2) ---
 output "sqs_produs_queue_arn" {
   description = "SQS queue ARN — produs (us-west-2)"

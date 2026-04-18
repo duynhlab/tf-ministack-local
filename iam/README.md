@@ -193,21 +193,21 @@ iam/
 ├── stg/                   ← Staging environment
 │   ├── providers.tf       # 2 providers: default (Team B) + team_a
 │   ├── variables.tf       # Account IDs, names, OIDC config
-│   ├── main.tf            # 10 resources
+│   ├── main.tf            # 12 resources
 │   └── outputs.tf         # ARNs, URLs, ServiceAccount annotation
 └── prod/                  ← Production environment
     ├── providers.tf       # 3 providers: default (produs) + eu + team_a
     ├── variables.tf       # Account IDs, 2 regions, 2 OIDC configs
-    ├── main.tf            # 15 resources
+    ├── main.tf            # 17 resources
     └── outputs.tf         # ARNs for both regions
 ```
 
 ### Resource Count
 
-| Environment | SNS | SQS | SQS Policy | Subscription | IAM OIDC | IAM Role | IAM Policy | Attachment | Total |
-|-------------|-----|-----|------------|--------------|----------|----------|------------|------------|-------|
-| **stg** | 1 topic + 1 policy | 2 (main + DLQ) | 1 | 1 | 1 | 1 | 1 | 1 | **10** |
-| **prod** | 1 topic + 1 policy | 4 (2 main + 2 DLQ) | 2 | 2 | 2 | 1 | 1 | 1 | **15** |
+| Environment | KMS | SNS | SQS | SQS Policy | Subscription | IAM OIDC | IAM Role | IAM Policy | Attachment | Total |
+|-------------|-----|-----|-----|------------|--------------|----------|----------|------------|------------|-------|
+| **stg** | 1 key + 1 alias | 1 topic + 1 policy | 2 (main + DLQ) | 1 | 1 | 1 | 1 | 1 | 1 | **12** |
+| **prod** | 1 key + 1 alias | 1 topic + 1 policy | 4 (2 main + 2 DLQ) | 2 | 2 | 2 | 1 | 1 | 1 | **17** |
 
 ---
 
@@ -298,7 +298,7 @@ spec:
 | # SQS queues | 1 | 2 (fan-out) |
 | # EKS clusters | 1 | 2 |
 | IRSA OIDC trusts | 1 | 2 (dual-region) |
-| Total resources | 10 | 15 |
+| Total resources | 12 | 17 |
 
 ---
 

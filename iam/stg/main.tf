@@ -17,9 +17,27 @@ locals {
 # 1. TEAM A RESOURCES (SNS — us-west-2)
 # ===========================================================================
 
+resource "aws_kms_key" "sns" {
+  provider            = aws.team_a
+  description         = "CMK for SNS topic encryption - ${var.environment}"
+  enable_key_rotation = true
+
+  tags = merge(local.tags, {
+    Name = "sns-cmk-${var.environment}"
+    Team = "team-a"
+  })
+}
+
+resource "aws_kms_alias" "sns" {
+  provider      = aws.team_a
+  name          = "alias/sns-${var.environment}"
+  target_key_id = aws_kms_key.sns.key_id
+}
+
 resource "aws_sns_topic" "events" {
-  provider = aws.team_a
-  name     = var.sns_topic_name
+  provider          = aws.team_a
+  name              = var.sns_topic_name
+  kms_master_key_id = aws_kms_key.sns.arn
 
   tags = merge(local.tags, {
     Name = var.sns_topic_name
@@ -74,6 +92,7 @@ data "aws_iam_policy_document" "sns_topic_policy" {
 resource "aws_sqs_queue" "dlq" {
   name                      = var.sqs_dlq_name
   message_retention_seconds = 1209600 # 14 days
+  sqs_managed_sse_enabled   = true
 
   tags = merge(local.tags, {
     Name = var.sqs_dlq_name
@@ -88,6 +107,7 @@ resource "aws_sqs_queue" "events" {
   visibility_timeout_seconds = 300
   message_retention_seconds  = 345600 # 4 days
   receive_wait_time_seconds  = 20     # long polling
+  sqs_managed_sse_enabled    = true
 
   redrive_policy = jsonencode({
     deadLetterTargetArn = aws_sqs_queue.dlq.arn

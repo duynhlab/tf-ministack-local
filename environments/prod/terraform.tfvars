@@ -66,6 +66,8 @@ tgw_spokes_region_b = {
 }
 
 enable_tgw_cross_region_peering = false
+enable_transit_gateway          = false
+enable_privatelink              = false
 enable_nat_gateway              = true
 
 tags = {

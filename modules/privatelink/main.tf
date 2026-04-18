@@ -11,7 +11,7 @@ terraform {
   required_providers {
     aws = {
       source                = "hashicorp/aws"
-      version               = ">= 4.0, < 4.67"
+      version               = ">= 6.0"
       configuration_aliases = [aws.provider_region, aws.consumer_region]
     }
   }
@@ -26,8 +26,8 @@ data "aws_region" "consumer" {
 }
 
 locals {
-  provider_azs = ["${data.aws_region.provider.name}a", "${data.aws_region.provider.name}b"]
-  consumer_azs = ["${data.aws_region.consumer.name}a", "${data.aws_region.consumer.name}b"]
+  provider_azs = ["${data.aws_region.provider.id}a", "${data.aws_region.provider.id}b"]
+  consumer_azs = ["${data.aws_region.consumer.id}a", "${data.aws_region.consumer.id}b"]
 
   provider_prefix = var.provider_vpc_name
   consumer_prefix = var.consumer_vpc_name
@@ -101,7 +101,7 @@ resource "aws_route_table_association" "provider_public" {
 resource "aws_eip" "provider_nat" {
   provider = aws.provider_region
   count    = var.enable_nat_gateway ? 1 : 0
-  vpc      = true
+  domain   = "vpc"
 
   tags = merge(local.default_tags, { Name = "${local.provider_prefix}-nat-eip" })
 
@@ -419,7 +419,7 @@ resource "aws_route_table_association" "consumer_public" {
 resource "aws_eip" "consumer_nat" {
   provider = aws.consumer_region
   count    = var.enable_nat_gateway ? 1 : 0
-  vpc      = true
+  domain   = "vpc"
 
   tags = merge(local.default_tags, { Name = "${local.consumer_prefix}-nat-eip" })
 

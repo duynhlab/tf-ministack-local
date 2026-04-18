@@ -58,6 +58,7 @@ module "vpc_peering" {
 
 module "privatelink" {
   source = "../../modules/privatelink"
+  count  = var.enable_privatelink ? 1 : 0
 
   providers = {
     aws.provider_region = aws.ap_southeast_1
@@ -83,6 +84,7 @@ module "privatelink" {
 
 module "transit_gateway" {
   source = "../../modules/transit-gateway"
+  count  = var.enable_transit_gateway ? 1 : 0
 
   providers = {
     aws.region_a = aws.ap_southeast_1

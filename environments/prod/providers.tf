@@ -4,12 +4,12 @@ terraform {
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = ">= 4.0, < 4.67"
+      version = ">= 6.0"
     }
   }
 }
 
-# LocalStack Pro default provider (for modules without explicit provider mapping)
+# MiniStack default provider (for modules without explicit provider mapping)
 provider "aws" {
   region                      = "ap-southeast-1"
   access_key                  = "test"
@@ -20,21 +20,25 @@ provider "aws" {
   s3_use_path_style           = true
 
   endpoints {
-    ec2   = "http://localhost:4567"
-    sts   = "http://localhost:4567"
-    elbv2 = "http://localhost:4567"
+    ec2   = "http://localhost:4566"
+    iam   = "http://localhost:4566"
+    s3    = "http://localhost:4566"
+    sts   = "http://localhost:4566"
+    elbv2 = "http://localhost:4566"
+    wafv2 = "http://localhost:4566"
+    kms   = "http://localhost:4566"
   }
 
   default_tags {
     tags = {
       Project     = "vpc-connectivity-lab"
-      Environment = "localstack-prod"
+      Environment = "ministack-prod"
       ManagedBy   = "terraform"
     }
   }
 }
 
-# LocalStack Pro provider - Region A (ap-southeast-1)
+# MiniStack provider - Region A (ap-southeast-1)
 provider "aws" {
   alias                       = "ap_southeast_1"
   region                      = "ap-southeast-1"
@@ -46,21 +50,25 @@ provider "aws" {
   s3_use_path_style           = true
 
   endpoints {
-    ec2   = "http://localhost:4567"
-    sts   = "http://localhost:4567"
-    elbv2 = "http://localhost:4567"
+    ec2   = "http://localhost:4566"
+    iam   = "http://localhost:4566"
+    s3    = "http://localhost:4566"
+    sts   = "http://localhost:4566"
+    elbv2 = "http://localhost:4566"
+    wafv2 = "http://localhost:4566"
+    kms   = "http://localhost:4566"
   }
 
   default_tags {
     tags = {
       Project     = "vpc-connectivity-lab"
-      Environment = "localstack-prod"
+      Environment = "ministack-prod"
       ManagedBy   = "terraform"
     }
   }
 }
 
-# LocalStack Pro provider - Region B (us-east-1)
+# MiniStack provider - Region B (us-east-1)
 provider "aws" {
   alias                       = "us_east_1"
   region                      = "us-east-1"
@@ -72,15 +80,19 @@ provider "aws" {
   s3_use_path_style           = true
 
   endpoints {
-    ec2   = "http://localhost:4567"
-    sts   = "http://localhost:4567"
-    elbv2 = "http://localhost:4567"
+    ec2   = "http://localhost:4566"
+    iam   = "http://localhost:4566"
+    s3    = "http://localhost:4566"
+    sts   = "http://localhost:4566"
+    elbv2 = "http://localhost:4566"
+    wafv2 = "http://localhost:4566"
+    kms   = "http://localhost:4566"
   }
 
   default_tags {
     tags = {
       Project     = "vpc-connectivity-lab"
-      Environment = "localstack-prod"
+      Environment = "ministack-prod"
       ManagedBy   = "terraform"
     }
   }

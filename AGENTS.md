@@ -6,14 +6,14 @@ Guidance for AI coding agents (Claude Code, Cursor) working in this repository.
 
 ## Purpose
 
-Terraform lab for **enterprise-style AWS networking** using two emulators:
+Terraform lab for **enterprise-style AWS networking** using **MiniStack** — a free, open-source AWS emulator.
 
 | Environment | Emulator | Endpoint |
 |-------------|----------|----------|
 | `environments/dev` | MiniStack | `http://localhost:4566` |
-| `environments/prod` | LocalStack Pro | `http://localhost:4567` |
+| `environments/prod` | MiniStack | `http://localhost:4566` |
 
-`prod` is the main multi-pattern scenario: VPC peering, PrivateLink, Transit Gateway hub–spoke, 3-tier **main / ingress** VPC (`module.main_vpc`, IGW → public / app / data).
+Both environments use the same MiniStack instance. `prod` is the multi-pattern scenario: VPC peering, PrivateLink, Transit Gateway hub–spoke, 3-tier **main / ingress** VPC (`module.main_vpc`, IGW → public / app / data).
 
 ---
 
@@ -28,7 +28,7 @@ Use **`docs/subnet.csv`** for CIDRs. Intended learning areas:
 - **EC2 attachments**: Security Groups (explicit rules), Elastic IPs, ENIs, key pairs, instances (lab patterns; no real VMs on emulators).
 - **Core hardening (always in scope for this lab)**: **Network ACLs**, **VPC Flow Logs**, **EBS** (volumes/snapshots as used by patterns).
 
-API-level gaps vs emulators: **[docs/support.md](docs/support.md)** (authoritative matrix).
+API-level details: **[docs/support.md](docs/support.md)** (authoritative matrix).
 
 ---
 
@@ -38,10 +38,10 @@ API-level gaps vs emulators: **[docs/support.md](docs/support.md)** (authoritati
 docs/
   report.md
   subnet.csv              # CIDR source of truth
-  support.md               # MiniStack vs LocalStack Pro API coverage
+  support.md               # MiniStack API coverage
 environments/
   dev/                     # MiniStack, ap-southeast-1, :4566
-  prod/                    # LocalStack Pro, multi-region, :4567
+  prod/                    # MiniStack, multi-region, :4566
 modules/
   vpc-base/
   vpc-peering/
@@ -57,20 +57,17 @@ modules/
 
 ## Runbook (after Terraform / module / script changes)
 
-1. **Start emulators**
+1. **Start MiniStack**
 
 ```bash
 ./scripts/setup.sh
 ```
 
-Requires **`LOCALSTACK_AUTH_TOKEN`** in the environment for LocalStack Pro (export locally, or GitHub Actions **Repository secret** — never commit tokens).
+Uses `podman compose` (preferred) or `docker compose` as fallback.
 
 2. **Health**
 
 ```bash
-curl -sf http://localhost:4566/_localstack/health
-curl -sf http://localhost:4567/_localstack/health   # if token was set
-# Optional (MiniStack native):
 curl -sf http://localhost:4566/_ministack/health
 ```
 
@@ -98,13 +95,11 @@ terraform -chdir=environments/prod destroy -auto-approve
 ./scripts/teardown.sh
 ```
 
-If `LOCALSTACK_AUTH_TOKEN` is unset, `setup.sh` still starts MiniStack; **full `prod` verification** needs the token.
-
 ---
 
 ## Provider rules (all environments)
 
-- Keep **`endpoints { ... }`** overrides pointing at the correct emulator ports.
+- Keep **`endpoints { ... }`** overrides pointing at `http://localhost:4566`.
 - Keep:
   - `skip_credentials_validation = true`
   - `skip_metadata_api_check = true`
@@ -114,20 +109,22 @@ If `LOCALSTACK_AUTH_TOKEN` is unset, `setup.sh` still starts MiniStack; **full `
 
 ### `hashicorp/aws` version and MiniStack
 
-- Use **`>= 4.0, < 4.67`** (see `providers.tf`) so `aws_vpc` refresh does not call **`DescribeVpcClassicLink`** (missing on MiniStack). See [docs/support.md](docs/support.md).
-- Other gaps: **`DescribeAddressesAttribute`** on `aws_eip` — still document in `support.md`; same pin helps avoid provider drift.
+- Use **`>= 6.0`** — MiniStack latest supports all required APIs including `DescribeVpcClassicLink`, `DescribeAddressesAttribute`, `DescribeVpcAttribute`, and `DescribeSecurityGroupRules`.
+- MiniStack is explicitly compatible with **Terraform AWS Provider v5 and v6**.
 - **Commit** `environments/dev/.terraform.lock.hcl` and `environments/prod/.terraform.lock.hcl` so CI resolves the same build.
-- AWS provider **5.x/6.x** on `dev` needs MiniStack to implement missing EC2 read APIs, or use workarounds in `support.md`.
 
 ---
 
 ## Known emulation limitations (short)
 
-| Resource | Where | Issue | Workaround |
-|----------|-------|-------|------------|
-| `aws_ec2_transit_gateway_peering_attachment_accepter` | LocalStack Pro | Provider waiter on `DescribeTransitGatewayPeeringAttachments` may never complete during apply. | Set `enable_tgw_cross_region_peering = false` in `modules/transit-gateway` / `prod/terraform.tfvars` (default). Real AWS may use `true`. |
+| Resource | Issue | Workaround |
+|----------|-------|------------|
+| `aws_ec2_transit_gateway` | `CreateTransitGateway` not implemented | Set `enable_transit_gateway = false` (default) |
+| `aws_vpc_endpoint_service` | `CreateVpcEndpointServiceConfiguration` not implemented | Set `enable_privatelink = false` (default) |
+| `aws_ec2_transit_gateway_peering_attachment_accepter` | TGW peering waiter may not complete | Set `enable_tgw_cross_region_peering = false` (default) |
+| IAM policy enforcement | MiniStack does not enforce IAM policies | Rules stored, not enforced — lab-only |
 
-Full tables: **[docs/support.md](docs/support.md)**. MiniStack upstream: [releases](https://github.com/Nahuel990/ministack/releases).
+Full tables: **[docs/support.md](docs/support.md)**. MiniStack upstream: [releases](https://github.com/ministackorg/ministack/releases).
 
 ---
 
@@ -164,7 +161,6 @@ Do not add new providers or external modules without a clear request.
 - **Prod VPC names in tfvars**: Peering and PrivateLink VPC **Name** tags come from **`peering_*_vpc_name`** and **`pl_*_vpc_name`** in `environments/prod` (defaults align with `docs/subnet.csv`). TGW hub **Name** tags use **`tgw_name_tag_region_*`**; spoke VPC names remain **map keys** in `tgw_spokes_region_*`. Inventory table: [docs/README.md](docs/README.md) **§1.3**.
 - **Naming and diagrams**: Use [docs/README.md](docs/README.md) — **§1.2 *Network conventions*** for landing zone vs spoke, VPC naming table, and Gateway vs Interface endpoint diagrams. Renaming existing VPCs in Terraform can force replacement; use the conventions for **new** resources or planned migrations.
 - **Endpoints in code**: `modules/vpc-base` exposes optional flags: **S3 Gateway** (app + data route tables), **KMS** and **STS Interface** (app subnets, dedicated SG for TCP 443 from the VPC CIDR, `private_dns_enabled = true`). **Gateway** = route-table–based; **Interface** = ENI in subnets.
-- **Emulators**: EC2 VPC endpoint APIs are listed under **EC2 — VPC & Subnets** in [docs/support.md](docs/support.md). If you add another service endpoint and hit a gap, document it in `support.md` and add a short `# NOTE: Emulator limitation` on the resource.
 - **Tagging**: New endpoint and SG resources must use `merge(local.default_tags, { Name = ... })` like other `vpc-base` resources (see **Resource tagging (AWS)** below).
 - **Conventions drift**: When you introduce new lab-wide naming or endpoint rules, update **this file** and the long-form **README §1.2** together so agents and humans have one checklist and one narrative.
 
@@ -172,13 +168,21 @@ Do not add new providers or external modules without a clear request.
 
 ## Emulation compatibility (summary)
 
-| Capability | MiniStack (`dev`) | LocalStack Pro (`prod`) |
-|------------|-------------------|---------------------------|
-| EC2 / VPC core | Good | Good |
-| VPC peering | Basic | Better parity |
-| Transit Gateway | Limited | Supported |
-| PrivateLink | Limited | Supported |
-| IAM enforcement | Not real AWS | Emulated |
+| Capability | MiniStack |
+|------------|-----------|
+| EC2 / VPC core | ✅ Full (136 actions) |
+| VPC peering | ✅ |
+| Transit Gateway | ❌ `CreateTransitGateway` not implemented |
+| PrivateLink (VPC Endpoint Service) | ❌ `CreateVpcEndpointServiceConfiguration` not implemented |
+| ELBv2 / ALB / NLB | ✅ (control + data plane) |
+| WAF v2 | ✅ |
+| IAM enforcement | ⚠️ Not enforced (stored only) |
+| Terraform provider >= 6.0 | ✅ Compatible |
+
+**Module toggles in `environments/prod/terraform.tfvars`:**
+- `enable_transit_gateway = false` — skips `modules/transit-gateway` (TGW API missing)
+- `enable_privatelink = false` — skips `modules/privatelink` (VPC Endpoint Service API missing)
+- `enable_tgw_cross_region_peering = false` — only relevant when TGW is enabled
 
 When behavior differs from AWS:
 
@@ -192,7 +196,6 @@ When behavior differs from AWS:
 
 - 2-space indentation; `snake_case` for Terraform names.
 - No secrets in `.tf` or `terraform.tfvars`; keep `.tfstate` ignored.
-- `LOCALSTACK_AUTH_TOKEN` only via environment / CI secrets.
 
 ### Resource tagging (AWS) — always apply
 
@@ -202,6 +205,14 @@ When adding or editing Terraform under `modules/`, follow the same pattern as ex
 - Use `merge(local.default_tags, { Name = ... })` (and any other per-resource tags) on resources that support `tags`. **Do not** hardcode the module name in `TerraformModule`; always derive it with `basename(abspath(path.module))`.
 - New modules must include this `locals` block and pass `var.tags` from the root module as today.
 - Root environments continue to set `default_tags` on the `aws` provider for `Project`, `Environment`, `ManagedBy`; do not duplicate those keys unnecessarily on every resource unless your change requires an override.
+
+---
+
+## Container runtime
+
+This lab uses **Podman** (preferred) or Docker as fallback. Scripts auto-detect `podman-compose` → `podman compose` → `docker compose`.
+
+Docker Hub image: **`ministackorg/ministack:latest`**
 
 ---
 
@@ -223,7 +234,6 @@ If the target (`dev` vs `prod`) is unclear, ask one short question before coding
 
 ## Strictly avoid
 
-- Provider version upgrades unless asked or documented in `support.md` / this file.
 - Renaming/moving resources between modules unless asked.
 - Inventing CIDRs without `docs/subnet.csv`.
 - Manual state file edits.
@@ -235,5 +245,4 @@ If the target (`dev` vs `prod`) is unclear, ask one short question before coding
 
 - [docs/README.md](docs/README.md) — includes **§1.1** (tagging), **§1.2** (landing zone vs spoke, endpoints), **§1.3** (prod VPC inventory / tfvars map)
 - [docs/support.md](docs/support.md) — API coverage matrix and workarounds
-- [docs/changelog.md](docs/changelog.md)
-- [docs/report.md](docs/report.md)
+- [docs/README.md](docs/README.md) — Architecture analysis

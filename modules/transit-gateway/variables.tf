@@ -65,7 +65,7 @@ variable "tgw_asn_region_b" {
 }
 
 variable "enable_cross_region_peering" {
-  description = "Enable TGW cross-region peering. Set false for LocalStack (state machine does not complete)."
+  description = "Enable TGW cross-region peering. Set false for MiniStack (state machine does not complete)."
   type        = bool
   default     = false
 }
@@ -81,6 +81,6 @@ variable "tags" {
   type        = map(string)
   default = {
     Project     = "vpc-connectivity-lab"
-    Environment = "localstack"
+    Environment = "ministack"
   }
 }

@@ -5,13 +5,15 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 ENV_DIR="$PROJECT_DIR/environments"
 
-# Detect docker compose command
-if docker compose version > /dev/null 2>&1; then
+# Detect compose command (podman-compose > podman compose > docker compose)
+if command -v podman-compose > /dev/null 2>&1; then
+  DC="podman-compose"
+elif podman compose version > /dev/null 2>&1; then
+  DC="podman compose"
+elif docker compose version > /dev/null 2>&1; then
   DC="docker compose"
-elif command -v docker-compose > /dev/null 2>&1; then
-  DC="docker-compose"
 else
-  DC="docker compose"
+  DC="podman compose"
 fi
 
 echo "=== VPC Connectivity Lab – Teardown ==="

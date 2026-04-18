@@ -14,7 +14,7 @@ terraform {
   required_providers {
     aws = {
       source                = "hashicorp/aws"
-      version               = ">= 4.0, < 4.67"
+      version               = ">= 6.0"
       configuration_aliases = [aws.requester, aws.accepter]
     }
   }
@@ -29,8 +29,8 @@ data "aws_region" "accepter" {
 }
 
 locals {
-  requester_azs = ["${data.aws_region.requester.name}a", "${data.aws_region.requester.name}b"]
-  accepter_azs  = ["${data.aws_region.accepter.name}a", "${data.aws_region.accepter.name}b"]
+  requester_azs = ["${data.aws_region.requester.id}a", "${data.aws_region.requester.id}b"]
+  accepter_azs  = ["${data.aws_region.accepter.id}a", "${data.aws_region.accepter.id}b"]
 
   requester_prefix = var.requester_vpc_name
   accepter_prefix  = var.accepter_vpc_name
@@ -104,7 +104,7 @@ resource "aws_route_table_association" "requester_public" {
 resource "aws_eip" "requester_nat" {
   provider = aws.requester
   count    = var.enable_nat_gateway ? 1 : 0
-  vpc      = true
+  domain   = "vpc"
 
   tags = merge(local.default_tags, { Name = "${local.requester_prefix}-nat-eip" })
 
@@ -372,7 +372,7 @@ resource "aws_route_table_association" "accepter_public" {
 resource "aws_eip" "accepter_nat" {
   provider = aws.accepter
   count    = var.enable_nat_gateway ? 1 : 0
-  vpc      = true
+  domain   = "vpc"
 
   tags = merge(local.default_tags, { Name = "${local.accepter_prefix}-nat-eip" })
 
@@ -583,7 +583,7 @@ resource "aws_vpc_peering_connection" "this" {
   provider    = aws.requester
   vpc_id      = aws_vpc.requester.id
   peer_vpc_id = aws_vpc.accepter.id
-  peer_region = data.aws_region.accepter.name
+  peer_region = data.aws_region.accepter.id
   auto_accept = false
 
   tags = merge(local.default_tags, { Name = "${local.requester_prefix}-peering" })

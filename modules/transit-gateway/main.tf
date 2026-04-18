@@ -12,7 +12,7 @@ terraform {
   required_providers {
     aws = {
       source                = "hashicorp/aws"
-      version               = ">= 4.0, < 4.67"
+      version               = ">= 6.0"
       configuration_aliases = [aws.region_a, aws.region_b]
     }
   }
@@ -27,8 +27,8 @@ data "aws_region" "b" {
 }
 
 locals {
-  region_a_azs = ["${data.aws_region.a.name}a", "${data.aws_region.a.name}b"]
-  region_b_azs = ["${data.aws_region.b.name}a", "${data.aws_region.b.name}b"]
+  region_a_azs = ["${data.aws_region.a.id}a", "${data.aws_region.a.id}b"]
+  region_b_azs = ["${data.aws_region.b.id}a", "${data.aws_region.b.id}b"]
 
   all_spoke_cidrs_a = [for k, v in var.spoke_vpcs : v.cidr]
   all_spoke_cidrs_b = [for k, v in var.spoke_vpcs_region_b : v.cidr]
@@ -143,7 +143,7 @@ resource "aws_route_table_association" "spoke_a_public" {
 resource "aws_eip" "spoke_a_nat" {
   provider = aws.region_a
   for_each = var.enable_nat_gateway ? var.spoke_vpcs : {}
-  vpc      = true
+  domain   = "vpc"
 
   tags = merge(local.default_tags, { Name = "${each.key}-nat-eip" })
 
@@ -587,7 +587,7 @@ resource "aws_route_table_association" "spoke_b_public" {
 resource "aws_eip" "spoke_b_nat" {
   provider = aws.region_b
   for_each = var.enable_nat_gateway ? var.spoke_vpcs_region_b : {}
-  vpc      = true
+  domain   = "vpc"
 
   tags = merge(local.default_tags, { Name = "${each.key}-nat-eip" })
 
@@ -935,7 +935,7 @@ resource "aws_ec2_transit_gateway_peering_attachment" "cross_region" {
   provider                = aws.region_a
   transit_gateway_id      = aws_ec2_transit_gateway.region_a.id
   peer_transit_gateway_id = aws_ec2_transit_gateway.region_b.id
-  peer_region             = data.aws_region.b.name
+  peer_region             = data.aws_region.b.id
 
   tags = merge(local.default_tags, { Name = "tgw-peering-a-to-b" })
 }

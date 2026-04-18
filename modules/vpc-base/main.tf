@@ -11,7 +11,7 @@ terraform {
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = ">= 4.0, < 4.67"
+      version = ">= 6.0"
     }
   }
 }
@@ -222,7 +222,7 @@ resource "aws_vpc_endpoint" "s3" {
   count = var.enable_s3_gateway_endpoint ? 1 : 0
 
   vpc_id            = aws_vpc.this.id
-  service_name      = "com.amazonaws.${data.aws_region.current.name}.s3"
+  service_name      = "com.amazonaws.${data.aws_region.current.id}.s3"
   vpc_endpoint_type = "Gateway"
   route_table_ids   = concat(aws_route_table.app[*].id, aws_route_table.data[*].id)
 
@@ -233,7 +233,7 @@ resource "aws_vpc_endpoint" "kms" {
   count = var.enable_kms_interface_endpoint ? 1 : 0
 
   vpc_id              = aws_vpc.this.id
-  service_name        = "com.amazonaws.${data.aws_region.current.name}.kms"
+  service_name        = "com.amazonaws.${data.aws_region.current.id}.kms"
   vpc_endpoint_type   = "Interface"
   subnet_ids          = aws_subnet.app[*].id
   security_group_ids  = [aws_security_group.vpc_endpoints[0].id]
@@ -246,7 +246,7 @@ resource "aws_vpc_endpoint" "sts" {
   count = var.enable_sts_interface_endpoint ? 1 : 0
 
   vpc_id              = aws_vpc.this.id
-  service_name        = "com.amazonaws.${data.aws_region.current.name}.sts"
+  service_name        = "com.amazonaws.${data.aws_region.current.id}.sts"
   vpc_endpoint_type   = "Interface"
   subnet_ids          = aws_subnet.app[*].id
   security_group_ids  = [aws_security_group.vpc_endpoints[0].id]

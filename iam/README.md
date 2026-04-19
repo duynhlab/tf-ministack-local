@@ -1,4 +1,39 @@
-# Cross-Account SNS → SQS with IRSA — IAM Case Study
+# IAM Case Studies — Enterprise AWS Patterns on MiniStack
+
+4 case studies thực tế về IAM, từ đơn giản đến phức tạp. Mỗi case study đều chạy được trên MiniStack.
+
+## Mô hình IAM chung
+
+```
+Trust policy     = "Ai vào được nhà"           (trên IAM Role — assume_role_policy)
+Permission policy = "Vào nhà rồi được làm gì"    (gắn vào Role — policy attachment)
+Resource policy   = "Tài nguyên có cho phép không" (trên S3/SNS/SQS/KMS — resource policy)
+```
+
+## Tổng quan 4 Case Studies
+
+| # | Case Study | Folder | Resources | Key Concepts |
+|---|---|---|---|---|
+| 1 | [Cross-Account SNS→SQS + IRSA](#case-study-1-cross-account-sns--sqs-with-irsa) | `iam/stg/`, `iam/prod/` | 10 (stg), 15 (prod) | Cross-account, SNS topic policy, SQS queue policy, IRSA |
+| 2 | [EKS Pod → S3 (Same Account)](#case-study-2-eks-pod--s3-same-account) | `iam/s3-eks/` | 12 | IRSA vs Pod Identity, S3 bucket policy, ABAC |
+| 3 | [Cross-Account AssumeRole](#case-study-3-cross-account-assumerole) | `iam/cross-account/` | 14 | Chained AssumeRole, ExternalId, multi-account trust |
+| 4 | [S3 Event → SNS/SQS Fan-out](#case-study-4-s3-event--snssqs-fan-out) | `iam/s3-events/` | 20 | Event-driven, 4-layer policy chain, IRSA + Pod Identity |
+
+```mermaid
+flowchart LR
+  CS1["📌 Case 1\nSNS→SQS\nCross-Account"]
+  CS2["📌 Case 2\nEKS→S3\nSame Account"]
+  CS3["📌 Case 3\nAssumeRole\nChained"]
+  CS4["📌 Case 4\nS3 Event\nFan-out"]
+
+  CS1 -->|"thêm S3"| CS2
+  CS2 -->|"thêm cross-account"| CS3
+  CS3 -->|"thêm event-driven"| CS4
+```
+
+---
+
+## Case Study 1: Cross-Account SNS → SQS with IRSA
 
 Case study thực tế: **Team A publish events qua SNS**, **Team B (chúng ta) consume qua SQS trên EKS** — cross-account, cross-region.
 
@@ -805,3 +840,255 @@ kubectl exec -n events deploy/sqs-consumer -- \
 ```
 
 > **Lưu ý:** Case study `iam/` trong repo dùng IRSA vì MiniStack không emulate được Pod Identity Agent. Trên production EKS 1.34, dùng Pod Identity.
+
+---
+
+## Case Study 2: EKS Pod → S3 (Same Account)
+
+> **Folder:** `iam/s3-eks/` · **Resources:** 12 · **Account:** 555555555555
+
+### Scenario
+
+ML training pod trên EKS cần đọc/ghi S3 bucket cùng account. So sánh 2 pattern: IRSA vs Pod Identity.
+
+### Architecture
+
+```mermaid
+flowchart LR
+  subgraph EKS["EKS Cluster (555555555555)"]
+    Pod_IRSA["Pod A\nSA: ml-worker\nPattern: IRSA"]
+    Pod_PodId["Pod B\nSA: ml-worker\nPattern: Pod Identity"]
+  end
+
+  OIDC["OIDC Provider"]
+  STS["STS"]
+  Role_IRSA["IAM Role\ns3-reader-irsa"]
+  Role_PodId["IAM Role\ns3-reader-podid"]
+  Agent["Pod Identity\nAgent"]
+
+  subgraph S3["S3 (same account)"]
+    Bucket["s3://ml-training-data\n+ Bucket Policy\n+ Versioning + Encryption"]
+  end
+
+  Pod_IRSA -->|"1. SA token"| STS
+  STS -->|"2. Verify"| OIDC
+  STS -->|"3. Credentials"| Pod_IRSA
+  Pod_IRSA -->|"4. s3:GetObject"| Bucket
+  Role_IRSA -.->|"Trust: Federated OIDC"| STS
+
+  Pod_PodId -->|"1. Request"| Agent
+  Agent -->|"2-3. Credentials"| Pod_PodId
+  Pod_PodId -->|"4. s3:PutObject"| Bucket
+  Role_PodId -.->|"Trust: pods.eks.amazonaws.com"| Agent
+
+  classDef irsa fill:#d1ecf1,stroke:#0c5460,color:#000
+  classDef podid fill:#d4edda,stroke:#28a745,color:#000
+  class Pod_IRSA,Role_IRSA,OIDC irsa
+  class Pod_PodId,Role_PodId,Agent podid
+```
+
+### Policy Analysis (3 layers)
+
+| Layer | Policy Type | IRSA Pattern | Pod Identity Pattern |
+|-------|------------|--------------|---------------------|
+| **Trust** | `assume_role_policy` | `Federated` OIDC + `:sub` + `:aud` conditions | `Service: pods.eks.amazonaws.com` + `sts:TagSession` |
+| **Permission** | `aws_iam_policy` | `s3:GetObject/PutObject` scoped to `bucket/namespace/*` | ABAC: `s3:GetObject/PutObject` scoped to `bucket/${aws:PrincipalTag/kubernetes-namespace}/*` |
+| **Resource** | `aws_s3_bucket_policy` | Allow IRSA role ARN | Allow Pod Identity role ARN |
+
+### So sánh IRSA vs Pod Identity (Case Study 2)
+
+| Tiêu chí | IRSA | Pod Identity |
+|----------|------|-------------|
+| **Trust principal** | `Federated` (OIDC ARN cụ thể) | `pods.eks.amazonaws.com` (cố định) |
+| **Permission scope** | Hardcode namespace trong resource path | ABAC: `${aws:PrincipalTag/kubernetes-namespace}` |
+| **Thêm cluster mới** | Sửa trust policy (thêm OIDC URL) | Chỉ thêm Association |
+| **Thêm namespace mới** | Sửa cả trust + permission policy | Chỉ thêm Association, policy TỰ ĐỘNG scope |
+| **CloudTrail audit** | Thấy role name, khó trace pod | Auto session tags: cluster, namespace, SA |
+| **Setup complexity** | OIDC Provider + thumbprint | Install add-on, tạo Association |
+| **S3 prefix isolation** | Manual: `ml-training/*` | Auto: `${namespace}/*` |
+| **Terraform resources** | 6 (OIDC, role, trust, policy, attachment, bucket policy) | 4 (role, trust, policy, attachment) |
+
+### Validate
+
+```bash
+cd iam/s3-eks
+terraform init -input=false
+terraform apply -auto-approve   # 12 resources
+terraform output
+```
+
+---
+
+## Case Study 3: Cross-Account AssumeRole
+
+> **Folder:** `iam/cross-account/` · **Resources:** 14 · **Accounts:** 666666666666 → 777777777777
+
+### Scenario
+
+DevOps EKS pod (Account A) cần đọc S3 data lake (Account B). Pattern: chained AssumeRole.
+
+### Architecture
+
+```mermaid
+flowchart LR
+  subgraph AccA["Account A — DevOps (666666666666)"]
+    Pod["EKS Pod\nSA: data-exporter"]
+    RoleA_IRSA["IRSA Role A\ncross-acct-irsa"]
+    RoleA_PodId["Pod Identity Role A\ncross-acct-podid"]
+  end
+
+  STS["STS\nAssumeRole\n+ ExternalId"]
+
+  subgraph AccB["Account B — Data (777777777777)"]
+    RoleB["Target Role B\ndata-reader\ntrust: Role A ARN"]
+    S3["S3 Bucket\ndata-lake-exports\n+ Bucket Policy"]
+  end
+
+  Pod -->|"Hop 1: IRSA/PodId\ncredentials"| RoleA_IRSA
+  RoleA_IRSA -->|"Hop 2: sts:AssumeRole\nExternalId=cross-account-dev"| STS
+  STS -->|"Verify trust"| RoleB
+  RoleB -->|"Temp creds B"| Pod
+  Pod -->|"s3:GetObject\nexports/*"| S3
+
+  RoleA_PodId -.->|"Alternative:\nPod Identity path"| STS
+
+  style AccA fill:#e8f4f8
+  style AccB fill:#fff0e6
+```
+
+### Policy Analysis (4 layers — chained)
+
+| Layer | Location | Policy | Purpose |
+|-------|----------|--------|---------|
+| **Trust A** | Role A (Account A) | Federated OIDC / `pods.eks.amazonaws.com` | Pod assume Role A |
+| **Permission A** | Role A (Account A) | `sts:AssumeRole` on Role B ARN | Role A assume Role B |
+| **Trust B** | Role B (Account B) | `AWS: Role A ARN` + `sts:ExternalId` | Role A được vào Account B |
+| **Permission B** | Role B (Account B) | `s3:GetObject` on `exports/*` | Read S3 data lake |
+| **Resource** | S3 Bucket (Account B) | Allow Role B ARN | Bucket cho phép Role B |
+
+### So sánh IRSA vs Pod Identity (Case Study 3)
+
+| Tiêu chí | IRSA (chained) | Pod Identity (chained) |
+|----------|----------------|----------------------|
+| **Hop 1 trust** | Federated OIDC | `pods.eks.amazonaws.com` |
+| **Hop 2 trust** | Account B trusts Role A ARN | Account B trusts Role A ARN |
+| **ExternalId** | ✅ Same (recommended) | ✅ Same (recommended) |
+| **Cross-account audit** | CloudTrail: Role A ARN assumed Role B | CloudTrail: Role A ARN + session tags |
+| **Thêm cluster assume** | Sửa OIDC trust (Hop 1) | Chỉ thêm Association (Hop 1 không đổi) |
+| **Account B changes** | Không — trust Role A ARN | Không — trust Role A ARN |
+| **Total IAM roles** | 2 (A + B) | 2 (A + B) |
+| **Security advantage** | ExternalId prevents confused deputy | ExternalId + auto session tags |
+
+### Validate
+
+```bash
+cd iam/cross-account
+terraform init -input=false
+terraform apply -auto-approve   # 14 resources
+terraform output
+```
+
+---
+
+## Case Study 4: S3 Event → SNS/SQS Fan-out
+
+> **Folder:** `iam/s3-events/` · **Resources:** 20 · **Account:** 888888888888
+
+### Scenario
+
+File upload → S3 event notification → SNS fan-out → 2 SQS queues. EKS pods consume: processor (IRSA) + archiver (Pod Identity).
+
+### Architecture
+
+```mermaid
+flowchart TD
+  subgraph Upload["File Upload"]
+    User["User / CI Pipeline"]
+  end
+
+  subgraph S3Layer["Layer 1: S3 → SNS (Topic Policy)"]
+    S3["S3 Bucket\nfile-uploads\nEvent: ObjectCreated:*\n(.csv, .json)"]
+    SNS["SNS Topic\nfile-events\nPolicy: allow s3.amazonaws.com"]
+  end
+
+  subgraph SQSLayer["Layer 2: SNS → SQS (Queue Policy)"]
+    SQS1["SQS: file-processor\n+ DLQ\nPolicy: allow sns.amazonaws.com"]
+    SQS2["SQS: file-archiver\n+ DLQ\nPolicy: allow sns.amazonaws.com"]
+  end
+
+  subgraph EKSLayer["Layer 3: IAM → SQS (Permission Policy)"]
+    Pod1["EKS Pod: processor\nPattern: IRSA\nSA: file-processor"]
+    Pod2["EKS Pod: archiver\nPattern: Pod Identity\nSA: file-archiver"]
+  end
+
+  User -->|"PutObject"| S3
+  S3 -->|"S3 Event\nNotification"| SNS
+  SNS -->|"Fan-out"| SQS1
+  SNS -->|"Fan-out"| SQS2
+  SQS1 -->|"sqs:ReceiveMessage"| Pod1
+  SQS2 -->|"sqs:ReceiveMessage"| Pod2
+  Pod1 -.->|"s3:GetObject\n(fetch file)"| S3
+  Pod2 -.->|"s3:GetObject +\ns3:PutObject\n(archive)"| S3
+
+  classDef s3 fill:#fff2cc,stroke:#d6b656,color:#000
+  classDef sns fill:#f8cecc,stroke:#b85450,color:#000
+  classDef sqs fill:#dae8fc,stroke:#6c8ebf,color:#000
+  classDef irsa fill:#d1ecf1,stroke:#0c5460,color:#000
+  classDef podid fill:#d4edda,stroke:#28a745,color:#000
+
+  class S3 s3
+  class SNS sns
+  class SQS1,SQS2 sqs
+  class Pod1 irsa
+  class Pod2 podid
+```
+
+### Policy Chain Analysis (4 layers)
+
+| Layer | Resource | Policy Type | Principal | Action | Condition |
+|-------|----------|------------|-----------|--------|-----------|
+| **1** | SNS Topic | Topic Policy (resource) | `s3.amazonaws.com` | `sns:Publish` | `ArnLike: aws:SourceArn = bucket ARN` |
+| **2a** | SQS Processor | Queue Policy (resource) | `sns.amazonaws.com` | `sqs:SendMessage` | `ArnEquals: aws:SourceArn = topic ARN` |
+| **2b** | SQS Archiver | Queue Policy (resource) | `sns.amazonaws.com` | `sqs:SendMessage` | `ArnEquals: aws:SourceArn = topic ARN` |
+| **3a** | Processor Role | Trust (IRSA) | `Federated: OIDC ARN` | `sts:AssumeRoleWithWebIdentity` | `:sub` + `:aud` |
+| **3b** | Archiver Role | Trust (Pod Identity) | `pods.eks.amazonaws.com` | `sts:AssumeRole, sts:TagSession` | — |
+| **4a** | Processor Role | Permission | — | `sqs:ReceiveMessage` + `s3:GetObject` | Resource ARN scoped |
+| **4b** | Archiver Role | Permission | — | `sqs:ReceiveMessage` + `s3:GetObject/PutObject` | Resource ARN scoped |
+
+### So sánh IRSA vs Pod Identity (Case Study 4)
+
+| Tiêu chí | Processor (IRSA) | Archiver (Pod Identity) |
+|----------|------------------|------------------------|
+| **Trust** | Federated OIDC, `:sub` = `file-processor` | `pods.eks.amazonaws.com` |
+| **SQS access** | `sqs:ReceiveMessage` processor queue only | `sqs:ReceiveMessage` archiver queue only |
+| **S3 access** | `s3:GetObject` (read uploaded file) | `s3:GetObject + PutObject` (read + archive) |
+| **Audit trail** | Role name in CloudTrail | Role + namespace + SA tags |
+| **Scale to N queues** | 1 role per queue (or wildcard ARN) | 1 role per queue + ABAC possible |
+| **Event chain visibility** | S3 → SNS → SQS → Pod (4 hops) | S3 → SNS → SQS → Pod (4 hops) |
+
+### Validate
+
+```bash
+cd iam/s3-events
+terraform init -input=false
+terraform apply -auto-approve   # 20 resources
+terraform output
+```
+
+---
+
+## Bảng so sánh tổng hợp — 4 Case Studies
+
+| Tiêu chí | CS1: SNS→SQS | CS2: EKS→S3 | CS3: Cross-Account | CS4: S3 Events |
+|----------|-------------|-------------|-------------------|---------------|
+| **Accounts** | 2 (cross) | 1 (same) | 2 (cross) | 1 (same) |
+| **Services** | SNS, SQS, IAM | S3, IAM | S3, IAM, STS | S3, SNS, SQS, IAM |
+| **IRSA** | ✅ | ✅ | ✅ (chained) | ✅ (processor) |
+| **Pod Identity** | — | ✅ (ABAC) | ✅ (chained) | ✅ (archiver) |
+| **Resource policies** | SNS + SQS | S3 bucket | S3 bucket | SNS + SQS + S3 |
+| **Policy layers** | 3 | 3 | 5 (chained) | 4 |
+| **Event-driven** | ❌ | ❌ | ❌ | ✅ |
+| **ExternalId** | ❌ | ❌ | ✅ | ❌ |
+| **ABAC** | ❌ | ✅ (Pod Identity) | ❌ | ❌ |
+| **Difficulty** | ⭐⭐ | ⭐ | ⭐⭐⭐ | ⭐⭐⭐⭐ |
+| **Resources** | 10/15 | 12 | 14 | 20 |

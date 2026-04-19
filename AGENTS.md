@@ -200,10 +200,27 @@ When behavior differs from AWS:
 - 2-space indentation; `snake_case` for Terraform names.
 - No secrets in `.tf` or `terraform.tfvars`; keep `.tfstate` ignored.
 
+### Pre-push checklist
+
+Run before every `git push`:
+
+```bash
+terraform fmt -check -recursive
+trivy config --severity HIGH,CRITICAL iam/
+trivy config --severity HIGH,CRITICAL environments/
+```
+
+All commands must pass with 0 findings.
+
 ### Commit messages
 
 - AI Agents must not add `Signed-off-by` or `Co-authored-by` tags to the commit message.
 - Do not add `Assisted-by` or any other attribution trailers.
+- Limit the subject to 50 characters, start with a capital letter and do not end with a period.
+- Explain what and why in the body, if more than a trivial change; wrap it at 72 characters.
+- Use the imperative mood in the subject line (e.g., "Add support for X" instead of "Added support for X" or "Adds support for X").
+- Do not include GitHub mentions to issues in the commit message, use the PR description instead (e.g., "Fixes #123" or "Closes #123").
+- Do not include GitHub mentions to accounts (e.g., @username or @team) within the commit message.
 
 ### Resource tagging (AWS) — always apply
 

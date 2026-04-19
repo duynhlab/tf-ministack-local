@@ -200,6 +200,11 @@ When behavior differs from AWS:
 - 2-space indentation; `snake_case` for Terraform names.
 - No secrets in `.tf` or `terraform.tfvars`; keep `.tfstate` ignored.
 
+### Commit messages
+
+- AI Agents must not add `Signed-off-by` or `Co-authored-by` tags to the commit message.
+- Do not add `Assisted-by` or any other attribution trailers.
+
 ### Resource tagging (AWS) — always apply
 
 When adding or editing Terraform under `modules/`, follow the same pattern as existing modules (see [docs/README.md](docs/README.md), section *Resource tagging (AWS)*):

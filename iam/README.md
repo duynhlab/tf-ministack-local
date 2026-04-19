@@ -323,6 +323,40 @@ EKS có 3 pattern để pods gọi AWS APIs. Mỗi cách khác nhau về securit
 
 ### Pattern 1: Node Role (Instance Profile)
 
+```mermaid
+flowchart LR
+  subgraph Node["EKS Worker Node (i-0abc123)"]
+    P1["🟢 sqs-consumer"]
+    P2["🟡 nginx-ingress"]
+    P3["🟡 prometheus"]
+    P4["🔴 debug-pod"]
+  end
+
+  IMDS["IMDS\n169.254.169.254"]
+  NR["Node IAM Role\neks-node-role"]
+  SQS["SQS Queue"]
+
+  P1 -->|"HTTP GET /meta-data/iam/..."| IMDS
+  P2 -->|"HTTP GET /meta-data/iam/..."| IMDS
+  P3 -->|"HTTP GET /meta-data/iam/..."| IMDS
+  P4 -->|"HTTP GET /meta-data/iam/..."| IMDS
+
+  IMDS -->|"Same credentials"| NR
+  NR -->|"sqs:ReceiveMessage"| SQS
+
+  classDef green fill:#d4edda,stroke:#28a745,color:#000
+  classDef yellow fill:#fff3cd,stroke:#ffc107,color:#000
+  classDef red fill:#f8d7da,stroke:#dc3545,color:#000
+  classDef blue fill:#d1ecf1,stroke:#0c5460,color:#000
+
+  class P1 green
+  class P2,P3 yellow
+  class P4 red
+  class NR,IMDS blue
+```
+
+> 🚨 **Blast radius = toàn bộ node.** Mọi pod (kể cả attacker exec vào debug-pod) đều lấy được credentials của Node Role.
+
 **Cách hoạt động:**
 1. EKS worker node (EC2) có Instance Profile gắn IAM Role
 2. Mọi pod trên node đều truy cập được Instance Metadata Service (IMDS)
@@ -392,6 +426,39 @@ resource "aws_iam_role" "cross_account" {
 ### Pattern 2: IRSA (IAM Roles for Service Accounts)
 
 > Đây là pattern được implement trong case study `iam/stg/` và `iam/prod/`.
+
+```mermaid
+flowchart LR
+  subgraph Node["EKS Worker Node"]
+    subgraph Pod["Pod (SA: sqs-consumer)"]
+      Token["Projected SA Token\n/var/run/secrets/\neks.amazonaws.com/\nserviceaccount/token"]
+    end
+    Other["Other pods\n(SA: default)"]
+  end
+
+  STS["AWS STS\nAssumeRoleWithWebIdentity"]
+  OIDC["OIDC Provider\noidc.eks.region.amazonaws.com"]
+  Role["IAM Role\nsqs-consumer-role"]
+  SQS["SQS Queue"]
+
+  Token -->|"1. SDK sends token"| STS
+  STS -->|"2. Verify token"| OIDC
+  OIDC -->|"3. ✅ sub=SA:events:sqs-consumer\n✅ aud=sts.amazonaws.com"| STS
+  STS -->|"4. Scoped credentials"| Pod
+  Pod -->|"5. sqs:ReceiveMessage"| SQS
+  Role -.->|"Trust: Federated OIDC"| STS
+  Other -.->|"❌ No matching SA\n→ No credentials"| STS
+
+  classDef green fill:#d4edda,stroke:#28a745,color:#000
+  classDef red fill:#f8d7da,stroke:#dc3545,color:#000
+  classDef blue fill:#d1ecf1,stroke:#0c5460,color:#000
+
+  class Pod,Token green
+  class Other red
+  class STS,OIDC,Role blue
+```
+
+> ✅ **Chỉ pod có đúng ServiceAccount mới lấy được credentials.** Các pod khác trên cùng node không access được.
 
 **Cách hoạt động:**
 1. EKS cluster có OIDC Provider (mỗi cluster 1 URL unique)
@@ -504,6 +571,41 @@ data "aws_iam_policy_document" "irsa_trust" {
 ### Pattern 3: EKS Pod Identity (Recommended — EKS ≥ 1.24, Add-on required)
 
 > AWS ra mắt re:Invent 2023. Replacement chính thức cho IRSA.
+
+```mermaid
+flowchart LR
+  subgraph Node["EKS Worker Node"]
+    Pod["Pod\n(SA: sqs-consumer\nns: events)"]
+    Agent["Pod Identity Agent\n(DaemonSet)"]
+  end
+
+  EKSAuth["EKS Auth API\nGetPodIdentityCredentials"]
+  Assoc["Pod Identity Association\ncluster + ns:events\n+ SA:sqs-consumer\n→ role ARN"]
+  STS["AWS STS\nAssumeRole (internal)"]
+  Role["IAM Role\nsqs-consumer-role\ntrust: pods.eks.amazonaws.com"]
+  SQS["SQS Queue"]
+
+  Pod -->|"1. Credential request"| Agent
+  Agent -->|"2. GetPodIdentityCredentials\n(ClusterName, SA Token)"| EKSAuth
+  EKSAuth -->|"3. Lookup"| Assoc
+  EKSAuth -->|"4. AssumeRole"| STS
+  STS -->|"5. Credentials +\nsession tags"| EKSAuth
+  EKSAuth -->|"6. Return credentials"| Agent
+  Agent -->|"7. Credentials"| Pod
+  Pod -->|"8. sqs:ReceiveMessage"| SQS
+  Role -.->|"Trust: pods.eks.amazonaws.com"| STS
+
+  classDef green fill:#d4edda,stroke:#28a745,color:#000
+  classDef blue fill:#d1ecf1,stroke:#0c5460,color:#000
+  classDef purple fill:#e8daef,stroke:#6c3483,color:#000
+
+  class Pod,Agent green
+  class EKSAuth,STS,Role blue
+  class Assoc purple
+```
+
+> ✅ **Trust principal cố định** (`pods.eks.amazonaws.com`). Thêm cluster mới chỉ cần tạo Association, **không sửa IAM Role**.
+> Session tags tự động: `eks-cluster-name`, `kubernetes-namespace`, `kubernetes-service-account` → dùng cho ABAC policies.
 
 **Cách hoạt động:**
 1. Install EKS Pod Identity Agent add-on (DaemonSet chạy trên mỗi node)

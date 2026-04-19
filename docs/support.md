@@ -286,7 +286,7 @@ This document lists the AWS APIs used by this lab and their MiniStack support st
 
 | Operation | MiniStack | Notes |
 |---|---|---|
-| CreateKey / ListKeys / DescribeKey | ✅ | |
+| CreateKey / ListKeys / DescribeKey | ✅ | ⚠️ `CreateKey` fails on **aliased providers** (non-default `access_key`/`secret_key`) with `UnrecognizedClientException`. Use default provider or AWS-managed keys (`alias/aws/sns`) as workaround. |
 | GetPublicKey / Sign / Verify | ✅ | RSA + ECC |
 | Encrypt / Decrypt / GenerateDataKey / GenerateDataKeyWithoutPlaintext | ✅ | |
 | CreateAlias / DeleteAlias / ListAliases / UpdateAlias | ✅ | |

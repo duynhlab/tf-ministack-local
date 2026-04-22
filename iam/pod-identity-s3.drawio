@@ -1,0 +1,163 @@
+<mxfile host="app.diagrams.net">
+  <diagram name="Page-1" id="dBbwh8tURbXT7FlXv-cq">
+    <mxGraphModel dx="1140" dy="692" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1700" pageHeight="1100" math="0" shadow="0" adaptiveColors="auto">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="title" parent="1" style="text;align=center;fontSize=18;fontStyle=1;html=1;" value="EKS Pod Identity to S3 (via VPC Gateway Endpoint)" vertex="1">
+          <mxGeometry height="30" width="1660" x="20" y="10" as="geometry" />
+        </mxCell>
+        <mxCell id="aws" parent="1" style="swimlane;startSize=28;fillColor=#fff7e6;strokeColor=#d6b656;fontStyle=1;html=1;" value="AWS Account 879891341695 - Region ap-northeast-2" vertex="1">
+          <mxGeometry height="1020" width="1660" x="20" y="50" as="geometry" />
+        </mxCell>
+        <mxCell id="vpc" parent="aws" style="swimlane;startSize=28;fillColor=#e8f0fe;strokeColor=#6c8ebf;fontStyle=1;html=1;" value="VPC 10.110.0.0/16 (tokyo-multi-az)" vertex="1">
+          <mxGeometry height="950" width="1080" x="20" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="eks" parent="vpc" style="swimlane;startSize=24;fillColor=#dae8fc;strokeColor=#6c8ebf;html=1;" value="EKS Cluster: tokyo-multi-az-eks-cluster (k8s 1.34)" vertex="1">
+          <mxGeometry height="540" width="1040" x="20" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="ns_fusion" parent="eks" style="swimlane;startSize=24;fillColor=#d5e8d4;strokeColor=#82b366;html=1;" value="Namespace: fusion" vertex="1">
+          <mxGeometry height="220" width="320" x="20" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="sa_fusion" parent="ns_fusion" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" value="ServiceAccount: default" vertex="1">
+          <mxGeometry height="40" width="280" x="20" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="pod_fusion" parent="ns_fusion" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;" value="MOCM Pods (ma-tomcat, install-job, ...)" vertex="1">
+          <mxGeometry height="60" width="280" x="20" y="100" as="geometry" />
+        </mxCell>
+        <mxCell id="env_fusion" parent="ns_fusion" style="text;html=1;fontSize=10;fillColor=#f5f5f5;strokeColor=#999;align=left;spacingLeft=6;" value="env injected by webhook:&amp;nbsp;&lt;div&gt;AWS_CONTAINER_CREDENTIALS_FULL_URI=http://169.254.170.23/v1/credentials&lt;/div&gt;&lt;div&gt;AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE=projected SA token&lt;/div&gt;" vertex="1">
+          <mxGeometry height="40" width="300" x="10" y="170" as="geometry" />
+        </mxCell>
+        <mxCell id="ns_mdit" parent="eks" style="swimlane;startSize=24;fillColor=#d5e8d4;strokeColor=#82b366;html=1;" value="Namespace: mditaccess" vertex="1">
+          <mxGeometry height="220" width="320" x="360" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="sa_mdit" parent="ns_mdit" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" value="ServiceAccount: default" vertex="1">
+          <mxGeometry height="40" width="280" x="20" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="pod_mdit" parent="ns_mdit" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;" value="MDIT Access Pods" vertex="1">
+          <mxGeometry height="60" width="280" x="20" y="100" as="geometry" />
+        </mxCell>
+        <mxCell id="env_mdit" parent="ns_mdit" style="text;html=1;fontSize=10;fillColor=#f5f5f5;strokeColor=#999;align=center;" value="(same env injection - same role)" vertex="1">
+          <mxGeometry height="30" width="300" x="10" y="170" as="geometry" />
+        </mxCell>
+        <mxCell id="ns_other" parent="eks" style="swimlane;startSize=24;fillColor=#f8cecc;strokeColor=#b85450;html=1;" value="Namespace: default / kube-system / etc." vertex="1">
+          <mxGeometry height="220" width="320" x="700" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="pod_other" parent="ns_other" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#b85450;" value="Other Pods (no Pod Identity association)" vertex="1">
+          <mxGeometry height="50" width="280" x="20" y="50" as="geometry" />
+        </mxCell>
+        <mxCell id="env_other" parent="ns_other" style="text;html=1;fontSize=10;fillColor=#f5f5f5;strokeColor=#999;align=center;" value="No AWS_CONTAINER_* env, SDK falls back to IMDS = node IAM role (no S3 perms)" vertex="1">
+          <mxGeometry height="80" width="300" x="10" y="115" as="geometry" />
+        </mxCell>
+        <mxCell id="agent" parent="eks" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=center;fontStyle=1;" value="DaemonSet: eks-pod-identity-agent listens on 169.254.170.23:80 (EKS managed addon)" vertex="1">
+          <mxGeometry height="70" width="300" x="200" y="290" as="geometry" />
+        </mxCell>
+        <mxCell id="webhook" parent="eks" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=center;fontStyle=1;" value="EKS Pod Identity Webhook (control plane - injects env vars when pod SA has association)" vertex="1">
+          <mxGeometry height="70" width="300" x="540" y="290" as="geometry" />
+        </mxCell>
+        <mxCell id="node" parent="eks" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;align=center;" value="EC2 Worker Nodes (private subnets, AL2023). Node IAM Role: tokyo-multi-az-node-group (NO S3 policy - removed in migration)" vertex="1">
+          <mxGeometry height="70" width="640" x="200" y="400" as="geometry" />
+        </mxCell>
+        <mxCell id="rt" parent="vpc" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff;strokeColor=#999;fontSize=11;align=center;" value="Private Route Table (per AZ). Route: prefix-list pl-xxx (S3) -&gt; vpce-08eab16706d74a0a1" vertex="1">
+          <mxGeometry height="50" width="500" x="20" y="610" as="geometry" />
+        </mxCell>
+        <mxCell id="vpce" parent="vpc" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#3F8624;strokeColor=#fff;fontColor=#fff;fontStyle=1;align=center;" value="VPC Gateway Endpoint com.amazonaws.ap-northeast-2.s3 vpce-08eab16706d74a0a1" vertex="1">
+          <mxGeometry height="100" width="240" x="560" y="600" as="geometry" />
+        </mxCell>
+        <mxCell id="iam_box" parent="aws" style="swimlane;startSize=28;fillColor=#fce4ec;strokeColor=#a64ca6;fontStyle=1;html=1;" value="IAM (global)" vertex="1">
+          <mxGeometry height="540" width="520" x="1120" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="role" parent="iam_box" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#a64ca6;fontStyle=1;align=center;" value="IAM Role: tokyo-multi-az-mocm-app-s3" vertex="1">
+          <mxGeometry height="40" width="480" x="20" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="trust" parent="iam_box" style="text;html=1;fontSize=11;fillColor=#fff;strokeColor=#999;align=left;spacingLeft=8;" value="Trust Policy: Principal Service: pods.eks.amazonaws.com Action: sts:AssumeRole, sts:TagSession" vertex="1">
+          <mxGeometry height="60" width="480" x="20" y="100" as="geometry" />
+        </mxCell>
+        <mxCell id="perm" parent="iam_box" style="text;html=1;fontSize=11;fillColor=#fff;strokeColor=#999;align=left;spacingLeft=8;" value="Permission Policy (least-privilege): ObjectAccess: GetObject, PutObject, DeleteObject, AbortMultipartUpload, *Tagging, ListMultipartUploadParts. BucketAccess: ListBucket, ListBucketVersions, ListBucketMultipartUploads, GetBucketLocation. NO s3:* - NO DeleteBucket / PutBucketPolicy / PutBucketAcl. NO ListAllMyBuckets" vertex="1">
+          <mxGeometry height="120" width="480" x="20" y="170" as="geometry" />
+        </mxCell>
+        <mxCell id="assoc" parent="iam_box" style="text;html=1;fontStyle=1;align=center;" value="EKS Pod Identity Associations" vertex="1">
+          <mxGeometry height="20" width="480" x="20" y="300" as="geometry" />
+        </mxCell>
+        <mxCell id="assoc1" parent="iam_box" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff;strokeColor=#a64ca6;fontSize=11;" value="(cluster, namespace=fusion, sa=default) -&gt; role" vertex="1">
+          <mxGeometry height="30" width="480" x="20" y="325" as="geometry" />
+        </mxCell>
+        <mxCell id="assoc2" parent="iam_box" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff;strokeColor=#a64ca6;fontSize=11;" value="(cluster, namespace=mditaccess, sa=default) -&gt; role" vertex="1">
+          <mxGeometry height="30" width="480" x="20" y="360" as="geometry" />
+        </mxCell>
+        <mxCell id="sts" parent="iam_box" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#999;align=center;fontSize=11;" value="AWS STS Endpoint (reached via VPCE Interface for STS)" vertex="1">
+          <mxGeometry height="50" width="480" x="20" y="420" as="geometry" />
+        </mxCell>
+        <mxCell id="s3_box" parent="aws" style="swimlane;startSize=28;fillColor=#dff0d8;strokeColor=#3F8624;fontStyle=1;html=1;" value="Amazon S3 (regional)" vertex="1">
+          <mxGeometry height="390" width="520" x="1120" y="600" as="geometry" />
+        </mxCell>
+        <mxCell id="s3_allow_hdr" parent="s3_box" style="text;html=1;fontStyle=1;align=center;fillColor=#d5e8d4;" value="Allowed (in role policy)" vertex="1">
+          <mxGeometry height="22" width="500" x="10" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="b1" parent="s3_box" style="rounded=1;whiteSpace=wrap;html=1;fontSize=10;align=center;fillColor=#fff;strokeColor=#3F8624;" value="tokyo-multi-az-gears-fusion-files" vertex="1">
+          <mxGeometry height="60" width="160" x="20" y="70" as="geometry" />
+        </mxCell>
+        <mxCell id="b2" parent="s3_box" style="rounded=1;whiteSpace=wrap;html=1;fontSize=10;align=center;fillColor=#fff;strokeColor=#3F8624;" value="tokyo-multi-az-gears-cloud" vertex="1">
+          <mxGeometry height="60" width="160" x="190" y="70" as="geometry" />
+        </mxCell>
+        <mxCell id="b3" parent="s3_box" style="rounded=1;whiteSpace=wrap;html=1;fontSize=10;align=center;fillColor=#fff;strokeColor=#3F8624;" value="tokyo-multi-az-gears-custom-scripts" vertex="1">
+          <mxGeometry height="60" width="160" x="360" y="70" as="geometry" />
+        </mxCell>
+        <mxCell id="b4" parent="s3_box" style="rounded=1;whiteSpace=wrap;html=1;fontSize=10;align=center;fillColor=#fff;strokeColor=#3F8624;" value="tokyo-multi-az-mdcore" vertex="1">
+          <mxGeometry height="60" width="160" x="20" y="140" as="geometry" />
+        </mxCell>
+        <mxCell id="b5" parent="s3_box" style="rounded=1;whiteSpace=wrap;html=1;fontSize=10;align=center;fillColor=#fff;strokeColor=#3F8624;" value="tokyo-multi-az-fusion-updater" vertex="1">
+          <mxGeometry height="60" width="160" x="190" y="140" as="geometry" />
+        </mxCell>
+        <mxCell id="b6" parent="s3_box" style="rounded=1;whiteSpace=wrap;html=1;fontSize=10;align=center;fillColor=#fff;strokeColor=#3F8624;" value="tokyo-multi-az-mdfusion-vpack" vertex="1">
+          <mxGeometry height="60" width="160" x="360" y="140" as="geometry" />
+        </mxCell>
+        <mxCell id="s3_deny_hdr" parent="s3_box" style="text;html=1;fontStyle=1;align=center;fillColor=#f8cecc;" value="Not in role policy -&gt; DENY" vertex="1">
+          <mxGeometry height="22" width="500" x="10" y="220" as="geometry" />
+        </mxCell>
+        <mxCell id="b7" parent="s3_box" style="rounded=1;whiteSpace=wrap;html=1;fontSize=10;align=center;fillColor=#fff;strokeColor=#b85450;" value="tokyo-multi-az-ansible-ssm-logs" vertex="1">
+          <mxGeometry height="60" width="160" x="100" y="250" as="geometry" />
+        </mxCell>
+        <mxCell id="b8" parent="s3_box" style="rounded=1;whiteSpace=wrap;html=1;fontSize=10;align=center;fillColor=#fff;strokeColor=#b85450;" value="aws-waf-logs-tokyo-multi-az-alb" vertex="1">
+          <mxGeometry height="60" width="160" x="280" y="250" as="geometry" />
+        </mxCell>
+        <mxCell id="s3_note" parent="s3_box" style="text;html=1;fontSize=10;fillColor=#f5f5f5;strokeColor=#999;align=left;spacingLeft=8;" value="Verified: PUT/GET/LIST/DEL on 6 allowed buckets succeed. Bucket-admin (DeleteBucket / PutBucketPolicy / PutBucketAcl) -&gt; DENY. Account-level (ListAllMyBuckets) -&gt; DENY. Buckets in red -&gt; DENY (not in resource list)." vertex="1">
+          <mxGeometry height="60" width="500" x="10" y="320" as="geometry" />
+        </mxCell>
+        <mxCell id="e1" edge="1" parent="aws" source="pod_fusion" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#9673a6;" target="agent">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e2" edge="1" parent="aws" source="pod_mdit" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#9673a6;" target="agent">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e3" edge="1" parent="aws" source="webhook" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;dashed=1;strokeColor=#9673a6;" target="pod_fusion">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e4" edge="1" parent="aws" source="webhook" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;dashed=1;strokeColor=#9673a6;" target="pod_mdit">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e5" edge="1" parent="aws" source="agent" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#a64ca6;" target="sts">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e6" edge="1" parent="aws" source="sts" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;dashed=1;strokeColor=#a64ca6;" target="role">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e7" edge="1" parent="aws" source="pod_fusion" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#3F8624;strokeWidth=2;" target="vpce">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e8" edge="1" parent="aws" source="pod_mdit" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#3F8624;strokeWidth=2;" target="vpce">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e9" edge="1" parent="aws" source="vpce" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#3F8624;strokeWidth=2;" target="b2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e10" edge="1" parent="aws" source="pod_other" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#b85450;dashed=1;" target="vpce">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="legend" parent="aws" style="text;html=1;fontSize=11;fillColor=#fff;strokeColor=#999;align=left;spacingLeft=10;" value="Legend: purple = Pod Identity control plane / IAM AssumeRole; green = data path to S3 via VPC Gateway Endpoint (no NAT, no internet); red = denied path; dashed = control / trust-relationship (not data flow)" vertex="1">
+          <mxGeometry height="20" width="1080" x="20" y="990" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

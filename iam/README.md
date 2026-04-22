@@ -72,6 +72,7 @@ flowchart LR
 | 9 | [Storage Drivers on EKS](storage-drivers/README.md) | `storage-drivers/` | MiniStack runnable | Platform | EBS CSI resources, EFS IAM shape, pod role isolation |
 | 10 | [Secrets Access Cross-Account](cross-account-secrets/README.md) | `cross-account-secrets/` | MiniStack runnable | App workload, cross-account | Role chaining, secret/parameter ARN scoping |
 | 11 | [Cluster Access & Break-Glass](cluster-access/README.md) | `cluster-access/` | MiniStack runnable | Human access | IAM guardrails, optional access-entry resources, break-glass admin |
+| 12 | [Go BE → S3 Compute Matrix](s3-go-compute-matrix/README.md) | `s3-go-compute-matrix/` | MiniStack runnable | Same/cross-account, same/cross-region | EC2 instance profile, ECS task role, Lambda exec role, AssumeRole + ExternalId |
 
 ## Learning tracks
 
